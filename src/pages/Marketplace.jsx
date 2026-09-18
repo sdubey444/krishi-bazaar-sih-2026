@@ -368,10 +368,10 @@ export default function Marketplace({ setCurrentView, setSelectedOrderId }) {
             <div className="shrink-0 bg-gradient-to-r from-brand-700 to-brand-800 text-white p-4 sm:p-5 flex items-center justify-between border-b border-brand-800">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-white/20 text-white">
-                  Normal Consumer / Retail Purchase
+                  Direct Order from Farmer
                 </span>
                 <h3 className="text-lg font-bold text-white mt-1">
-                  Procure {purchasingListing.produce}
+                  Buy {purchasingListing.produce}
                 </h3>
               </div>
               <button

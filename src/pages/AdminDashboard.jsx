@@ -12,12 +12,15 @@ import {
   TrendingUp,
   Package,
   Activity,
-  Sparkles
+  Sparkles,
+  LogOut,
+  User
 } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import StatusBadge from '../components/StatusBadge';
 
 export default function AdminDashboard({ setCurrentView, setSelectedOrderId }) {
+  const [currentUser, setCurrentUser] = useState(store.currentUser);
   const [users, setUsers] = useState(store.users);
   const [listings, setListings] = useState(store.listings);
   const [requirements, setRequirements] = useState(store.requirements);
@@ -26,6 +29,7 @@ export default function AdminDashboard({ setCurrentView, setSelectedOrderId }) {
 
   useEffect(() => {
     return store.subscribe(state => {
+      setCurrentUser(state.currentUser);
       setUsers(state.users);
       setListings(state.listings);
       setRequirements(state.requirements);
@@ -65,13 +69,29 @@ export default function AdminDashboard({ setCurrentView, setSelectedOrderId }) {
               Admin Dashboard
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-1">
-              Manage platform users, crop listings, bulk requirements, and orders.
+              Logged in as {currentUser?.name || 'State Agritech Directorate'} • Manage platform users, crop listings, bulk requirements, and orders.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => store.resetSeedData()}
+              onClick={() => {
+                store.logout();
+                setCurrentView('landing');
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-white/20 backdrop-blur-sm"
+              title="Log out of Admin account"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Reset all demo listings, requirements, and orders to default state?')) {
+                  store.resetSeedData();
+                }
+              }}
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition-colors flex items-center gap-2 min-h-[44px]"
             >
               <RotateCcw className="w-3.5 h-3.5" />

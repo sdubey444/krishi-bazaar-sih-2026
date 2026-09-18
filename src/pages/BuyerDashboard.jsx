@@ -13,7 +13,8 @@ import {
   Sparkles,
   PackageCheck,
   PlusCircle,
-  AlertCircle
+  AlertCircle,
+  LogOut
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import MetricCard from '../components/MetricCard';
@@ -79,14 +80,26 @@ export default function BuyerDashboard({ setCurrentView, setSelectedOrderId, onO
               Welcome, {currentUser?.name || 'Buyer Partner'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-1">
-              Direct farm produce purchasing, consolidated lot procurement, and transparent logistics tracking.
+              Find fresh farm produce, place direct or bulk orders, and track your deliveries.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                store.logout();
+                setCurrentView('landing');
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-white/20 backdrop-blur-sm"
+              title="Log out of Buyer account"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+
             <button
               onClick={() => setCurrentView('marketplace')}
-              className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-slate-950 font-black text-xs shadow-md transition-colors flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-slate-950 font-black text-xs shadow-md transition-colors flex items-center gap-1.5 min-h-[40px]"
             >
               <ShoppingBag className="w-4 h-4" />
               Buy Produce Now
