@@ -37,7 +37,11 @@ class Store {
         this.logisticsPartners = storedPartners ? JSON.parse(storedPartners) : [...SEED_LOGISTICS_PARTNERS];
 
         const storedCurrentUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-        this.currentUser = storedCurrentUser ? JSON.parse(storedCurrentUser) : this.users[0]; // Default: Farmer A
+        if (storedCurrentUser && storedCurrentUser !== 'null' && storedCurrentUser !== 'undefined') {
+          this.currentUser = JSON.parse(storedCurrentUser);
+        } else {
+          this.currentUser = null;
+        }
       } else {
         this.users = [...SEED_USERS];
         this.listings = [...SEED_LISTINGS];
@@ -52,7 +56,7 @@ class Store {
       this.requirements = [...SEED_REQUIREMENTS];
       this.orders = [...SEED_ORDERS];
       this.logisticsPartners = [...SEED_LOGISTICS_PARTNERS];
-      this.currentUser = this.users[0];
+      this.currentUser = null;
     }
   }
 

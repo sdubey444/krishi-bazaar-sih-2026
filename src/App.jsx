@@ -7,6 +7,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import KrishiAiModal from './components/KrishiAiModal';
 import LogisticsRegisterModal from './components/LogisticsRegisterModal';
+import AuthPromptModal from './components/AuthPromptModal';
 import { Mic, Sparkles } from 'lucide-react';
 
 // Pages
@@ -34,6 +35,12 @@ export default function App() {
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isLogisticsRegisterOpen, setIsLogisticsRegisterOpen] = useState(false);
   const [defaultAiCropId, setDefaultAiCropId] = useState('wheat');
+
+  // Account-First Auth Interception State
+  const [authPrompt, setAuthPrompt] = useState(null); // { isOpen: boolean, title: string, message: string, actionType: string, returnAction: string, initialRole?: string }
+  const [authInitialMode, setAuthInitialMode] = useState('login'); // 'login' | 'register'
+  const [authInitialRole, setAuthInitialRole] = useState(null);
+  const [pendingReturnAction, setPendingReturnAction] = useState(null);
 
   // Keep browser history and URL hash in sync for proper Back/Forward navigation
   const setCurrentView = (nextView, replace = false) => {
@@ -85,13 +92,94 @@ export default function App() {
     }
   };
 
+  // Account-First Interceptor Function
+  const triggerAuthRequired = ({
+    title = 'Please Log In or Create an Account',
+    message = 'Please create an account or log in to continue.',
+    actionType = 'general',
+    returnAction = null,
+    initialRole = null
+  } = {}) => {
+    setAuthPrompt({
+      isOpen: true,
+      title,
+      message,
+      actionType,
+      returnAction,
+      initialRole
+    });
+  };
+
+  const handlePromptCreateAccount = () => {
+    const returnAct = authPrompt?.returnAction || null;
+    const initRole = authPrompt?.initialRole || null;
+    setAuthPrompt(null);
+    setPendingReturnAction(returnAct);
+    setAuthInitialRole(initRole);
+    setAuthInitialMode('register');
+    setCurrentView('auth');
+  };
+
+  const handlePromptLogin = () => {
+    const returnAct = authPrompt?.returnAction || null;
+    const initRole = authPrompt?.initialRole || null;
+    setAuthPrompt(null);
+    setPendingReturnAction(returnAct);
+    setAuthInitialRole(initRole);
+    setAuthInitialMode('login');
+    setCurrentView('auth');
+  };
+
+  const handleAuthSuccess = (user, returnedAction) => {
+    setCurrentUser(user);
+    const act = returnedAction || pendingReturnAction;
+    setPendingReturnAction(null);
+    setAuthInitialRole(null);
+
+    if (act === 'marketplace') {
+      setCurrentView('marketplace');
+    } else if (act === 'bulk-requirement') {
+      setCurrentView('bulk-requirement');
+    } else if (act === 'voice') {
+      setCurrentView(user?.role === 'farmer' ? 'farmer-dashboard' : 'buyer-dashboard');
+      setIsAiModalOpen(true);
+    } else if (act === 'order') {
+      setCurrentView('marketplace');
+    } else {
+      if (user?.role === 'farmer') {
+        setCurrentView('farmer-dashboard');
+      } else if (user?.role === 'buyer') {
+        setCurrentView('buyer-dashboard');
+      } else if (user?.role === 'admin') {
+        setCurrentView('admin-dashboard');
+      } else {
+        setCurrentView('landing');
+      }
+    }
+  };
+
+  const handleVoiceSearchClick = () => {
+    if (!currentUser) {
+      triggerAuthRequired({
+        title: 'Please Log In to Use Voice Search',
+        message: 'Please create an account or log in to continue with AI Voice Search.',
+        actionType: 'voice',
+        returnAction: 'voice'
+      });
+    } else {
+      setIsAiModalOpen(true);
+    }
+  };
+
   const renderActiveView = () => {
     switch (currentView) {
       case 'landing':
         return (
           <LandingPage
             setCurrentView={setCurrentView}
-            onOpenAiModal={() => setIsAiModalOpen(true)}
+            currentUser={currentUser}
+            onOpenAiModal={handleVoiceSearchClick}
+            onRequireAuth={triggerAuthRequired}
           />
         );
 
@@ -100,6 +188,8 @@ export default function App() {
           <Marketplace
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
+            currentUser={currentUser}
+            onRequireAuth={triggerAuthRequired}
           />
         );
 
@@ -132,6 +222,15 @@ export default function App() {
           <MarketIntel
             setCurrentView={setCurrentView}
             onOpenAiModal={(cropId) => {
+              if (!currentUser) {
+                triggerAuthRequired({
+                  title: 'Please Log In to Use Voice Search',
+                  message: 'Please create an account or log in to continue with AI Voice Search.',
+                  actionType: 'voice',
+                  returnAction: 'voice'
+                });
+                return;
+              }
               if (cropId && typeof cropId === 'string') {
                 setDefaultAiCropId(cropId);
               }
@@ -145,7 +244,7 @@ export default function App() {
           <FarmerDashboard
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
-            onOpenAiModal={() => setIsAiModalOpen(true)}
+            onOpenAiModal={handleVoiceSearchClick}
           />
         );
 
@@ -155,7 +254,7 @@ export default function App() {
           <BuyerDashboard
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
-            onOpenAiModal={() => setIsAiModalOpen(true)}
+            onOpenAiModal={handleVoiceSearchClick}
             initialTab={currentView === 'my-orders' ? 'orders' : 'dashboard'}
           />
         );
@@ -172,6 +271,10 @@ export default function App() {
         return (
           <AuthPage
             setCurrentView={setCurrentView}
+            initialMode={authInitialMode}
+            initialRole={authInitialRole}
+            returnAction={pendingReturnAction}
+            onAuthSuccess={handleAuthSuccess}
           />
         );
 
@@ -179,7 +282,9 @@ export default function App() {
         return (
           <LandingPage
             setCurrentView={setCurrentView}
-            onOpenAiModal={() => setIsAiModalOpen(true)}
+            currentUser={currentUser}
+            onOpenAiModal={handleVoiceSearchClick}
+            onRequireAuth={triggerAuthRequired}
           />
         );
     }
@@ -201,8 +306,9 @@ export default function App() {
       <Navbar
         currentView={currentView}
         setCurrentView={setCurrentView}
-        onOpenAiModal={() => setIsAiModalOpen(true)}
+        onOpenAiModal={handleVoiceSearchClick}
         onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
+        onRequireAuth={triggerAuthRequired}
       />
 
       {/* Primary Content Router */}
@@ -216,7 +322,7 @@ export default function App() {
       {/* Floating Persistent Voice Assistant / Ask AI Button */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
-          onClick={() => setIsAiModalOpen(true)}
+          onClick={handleVoiceSearchClick}
           className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
           title="Open Voice Search & Ask AI"
         >
@@ -239,6 +345,17 @@ export default function App() {
       <LogisticsRegisterModal
         isOpen={isLogisticsRegisterOpen}
         onClose={() => setIsLogisticsRegisterOpen(false)}
+      />
+
+      {/* Account-First Authentication Interception Modal */}
+      <AuthPromptModal
+        isOpen={Boolean(authPrompt?.isOpen)}
+        onClose={() => setAuthPrompt(null)}
+        title={authPrompt?.title}
+        message={authPrompt?.message}
+        actionType={authPrompt?.actionType}
+        onCreateAccount={handlePromptCreateAccount}
+        onLogin={handlePromptLogin}
       />
     </div>
   );

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 
-export default function Marketplace({ setCurrentView, setSelectedOrderId }) {
+export default function Marketplace({ setCurrentView, setSelectedOrderId, onRequireAuth }) {
   const [listings, setListings] = useState(store.listings);
   const [currentUser, setCurrentUser] = useState(store.currentUser);
 
@@ -72,6 +72,19 @@ export default function Marketplace({ setCurrentView, setSelectedOrderId }) {
   const locations = ['All', ...new Set(listings.map(l => l.location))];
 
   const handleOpenBuy = (listing) => {
+    if (!currentUser) {
+      if (onRequireAuth) {
+        onRequireAuth({
+          title: 'Please Log In to Place Your Order',
+          message: 'Please create an account or log in to place an order directly with verified farmers.',
+          actionType: 'order',
+          returnAction: 'order'
+        });
+        return;
+      }
+      setCurrentView('auth');
+      return;
+    }
     setPurchasingListing(listing);
     setBuyUnit('kg');
     const avail = listing.availableQuantity !== undefined ? listing.availableQuantity : listing.quantity;

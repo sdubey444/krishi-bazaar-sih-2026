@@ -24,7 +24,8 @@ export default function Navbar({
   currentView,
   setCurrentView,
   onOpenAiModal,
-  onOpenLogisticsRegister
+  onOpenLogisticsRegister,
+  onRequireAuth
 }) {
   const [currentUser, setCurrentUser] = useState(store.currentUser);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -53,6 +54,18 @@ export default function Navbar({
   }
 
   const handleNav = (viewId) => {
+    if (!currentUser && (viewId === 'marketplace' || viewId === 'bulk-requirement')) {
+      if (onRequireAuth) {
+        onRequireAuth({
+          title: viewId === 'marketplace' ? 'Please Log In to Explore Marketplace' : 'Please Log In to Order Bulk Produce',
+          message: 'Please create an account or log in to continue.',
+          actionType: 'marketplace',
+          returnAction: viewId
+        });
+        setMobileMenuOpen(false);
+        return;
+      }
+    }
     setCurrentView(viewId);
     setMobileMenuOpen(false);
   };

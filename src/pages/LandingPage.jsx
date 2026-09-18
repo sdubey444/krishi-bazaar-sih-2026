@@ -19,7 +19,7 @@ import {
 import { CROPS, CROP_CATEGORIES } from '../config/crops';
 import { store } from '../services/store';
 
-export default function LandingPage({ setCurrentView, onOpenAiModal }) {
+export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser, onRequireAuth }) {
   const categories = [
     {
       name: CROP_CATEGORIES.GRAINS,
@@ -53,6 +53,40 @@ export default function LandingPage({ setCurrentView, onOpenAiModal }) {
     }
   ];
 
+  const handleExploreMarketplace = () => {
+    if (!currentUser) {
+      if (onRequireAuth) {
+        onRequireAuth({
+          title: 'Please Log In to Explore Marketplace',
+          message: 'Please create an account or log in to continue.',
+          actionType: 'marketplace',
+          returnAction: 'marketplace'
+        });
+        return;
+      }
+      setCurrentView('auth');
+      return;
+    }
+    setCurrentView('marketplace');
+  };
+
+  const handleOrderBulkProduce = () => {
+    if (!currentUser) {
+      if (onRequireAuth) {
+        onRequireAuth({
+          title: 'Please Log In to Order Bulk Produce',
+          message: 'Please create an account or log in to continue.',
+          actionType: 'marketplace',
+          returnAction: 'bulk-requirement'
+        });
+        return;
+      }
+      setCurrentView('auth');
+      return;
+    }
+    setCurrentView('bulk-requirement');
+  };
+
   return (
     <div className="space-y-16 pb-16">
       {/* HERO SECTION */}
@@ -82,7 +116,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal }) {
           {/* Primary Action Buttons */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
             <button
-              onClick={() => setCurrentView('marketplace')}
+              onClick={handleExploreMarketplace}
               className="px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Store className="w-4 h-4" />
@@ -90,10 +124,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal }) {
             </button>
 
             <button
-              onClick={() => {
-                store.setCurrentUser('buyer_1');
-                setCurrentView('bulk-requirement');
-              }}
+              onClick={handleOrderBulkProduce}
               className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Layers className="w-4 h-4" />
