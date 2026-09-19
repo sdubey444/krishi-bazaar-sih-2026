@@ -1,60 +1,15 @@
-// Gemini AI Explanation & Assistant Service
-// Grounds responses in structured platform market data and verified ICAR Agronomy Knowledge
-// Principle: TRUTH > DEMO APPEARANCE (transparently labels Live Gemini AI vs Grounded Offline Knowledge)
+// Krishi AI Grounded Intelligence Service
+// Provides agricultural intelligence from structured platform market data and verified ICAR Agronomy Knowledge
+// Principle: TRUTH > DEMO APPEARANCE — all responses are from grounded offline knowledge
+// Gemini API is RETIRED from this prototype. All intelligence is local/offline.
 
 import { CROP_MARKET_SERIES } from '../data/marketData.js';
 import { searchAgronomyKnowledgeBase } from '../data/agronomyKnowledgeBase.js';
 
 export const askKrishiAi = async (query, contextData = {}) => {
-  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' && process.env?.VITE_GEMINI_API_KEY);
   const cropId = contextData.cropId?.toLowerCase() || 'wheat';
   const series = CROP_MARKET_SERIES[cropId] || CROP_MARKET_SERIES['wheat'];
 
-  // If Gemini API key is provided, attempt live AI call
-  if (apiKey && apiKey !== 'your_gemini_api_key') {
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const systemInstruction = `You are Krishi AI, the official intelligent agricultural assistant of Krishi Bazaar.
-Provide practical, scientific agronomy advice and market insights for Indian farmers.
-Always be direct, compassionate, authentic, and farmer-friendly.
-Support Hindi, Hinglish, and English naturally.
-Do not invent prices or fake statistics.
-Context Data:
-Crop: ${series.cropName} (${series.category})
-Reference Price: ₹${series.currentPrice}/kg
-Market Signal: ${series.marketSignal}
-AI Insight: ${series.aiInsight}
-Supply Status: ${series.supplyStatus}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `${systemInstruction}\n\nUser Question: ${query}` }]
-            }
-          ]
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) {
-          return {
-            source: 'Gemini 1.5 Flash (Live AI)',
-            text: reply
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Gemini API call failed, using verified agronomy knowledge base', err);
-    }
-  }
-
-  // Graceful explainable local intelligence fallback
   const qLower = query.toLowerCase();
 
   // 1. Check for Agronomy & Crop Health Questions (Yellow leaves, disease, fertilizer, irrigation, etc.)
@@ -62,7 +17,7 @@ Supply Status: ${series.supplyStatus}`;
   if (agronomyMatch && !qLower.includes('price') && !qLower.includes('rate') && !qLower.includes('bhav') && !qLower.includes('daam')) {
     return {
       source: 'Krishi AI Agronomy Knowledge Base (ICAR / Grounded Offline Reference)',
-      text: `🌾 ${agronomyMatch.title}\n\n${agronomyMatch.summary}\n\nRecommendations:\n${agronomyMatch.remedy}\n\nNote: Grounded agricultural science guidance. Configure VITE_GEMINI_API_KEY in environment for live conversational Gemini AI.`
+      text: `🌾 ${agronomyMatch.title}\n\n${agronomyMatch.summary}\n\nRecommendations:\n${agronomyMatch.remedy}`
     };
   }
 
@@ -98,6 +53,6 @@ Supply Status: ${series.supplyStatus}`;
   // Default Platform Benchmark Record
   return {
     source: 'Krishi Market Intelligence Engine (Prototype Model)',
-    text: `Based on structured reference data for ${series.cropName}: Reference Price (Demo/Reference Data) is ₹${series.currentPrice}/${series.unit}. Signal: "${series.marketSignal}". ${series.aiInsight} Note: Structured platform benchmark records, not live external web quotes.`
+    text: `Based on structured reference data for ${series.cropName}: Reference Price is ₹${series.currentPrice}/${series.unit}. Signal: "${series.marketSignal}". ${series.aiInsight}`
   };
 };

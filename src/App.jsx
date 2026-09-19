@@ -336,85 +336,83 @@ export default function App() {
   };
 
   return (
-    <ErrorBoundary onReset={() => { setCurrentView('landing'); setIsAiModalOpen(false); }}>
-      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans relative">
-        {/* 1-Click Judge Role Switcher Banner */}
-        <QuickRoleBar onRoleChange={handleRoleChanged} />
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans relative">
+      {/* 1-Click Judge Role Switcher Banner */}
+      <QuickRoleBar onRoleChange={handleRoleChanged} />
 
-        {/* Main Responsive Header */}
-        <Navbar
-          currentView={currentView}
-          setCurrentView={setCurrentView}
-          onOpenAiModal={handleVoiceSearchClick}
-          onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
-          onOpenLocationSelector={() => setIsLocationModalOpen(true)}
-          onRequireAuth={triggerAuthRequired}
-        />
+      {/* Main Responsive Header */}
+      <Navbar
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        onOpenAiModal={handleVoiceSearchClick}
+        onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
+        onOpenLocationSelector={() => setIsLocationModalOpen(true)}
+        onRequireAuth={triggerAuthRequired}
+      />
 
-        {/* Compact Market Strip with Truthful Data Status */}
-        <MarketStrip
-          onOpenMarketIntel={(cropId) => {
-            if (cropId) setDefaultAiCropId(cropId);
-            setCurrentView('market-intel');
-          }}
-        />
+      {/* Compact Market Strip with Truthful Data Status */}
+      <MarketStrip
+        onOpenMarketIntel={(cropId) => {
+          if (cropId) setDefaultAiCropId(cropId);
+          setCurrentView('market-intel');
+        }}
+      />
 
-        {/* Primary Content Router */}
-        <main className="flex-1">
-          {renderActiveView()}
-        </main>
+      {/* Primary Content Router */}
+      <main className="flex-1">
+        {renderActiveView()}
+      </main>
 
-        {/* Platform Footer */}
-        <Footer setCurrentView={setCurrentView} />
+      {/* Platform Footer */}
+      <Footer setCurrentView={setCurrentView} />
 
-        {/* Floating Persistent Krishi AI Assistant Button */}
-        <div className="fixed bottom-6 right-6 z-40">
-          <button
-            onClick={handleVoiceSearchClick}
-            className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
-            title="Open Krishi AI / कृषि AI से बात करें"
-          >
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-              <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-            </div>
-            <span>Krishi AI / कृषि AI</span>
-          </button>
-        </div>
-
-        {/* Global Context-Aware Krishi AI Modal */}
-        <KrishiAiModal
-          isOpen={isAiModalOpen}
-          onClose={() => setIsAiModalOpen(false)}
-          defaultCropId={defaultAiCropId}
-          onNavigate={handleAiNavigate}
-          currentUser={currentUser}
-          currentRole={currentUser?.role}
-          currentView={currentView}
-        />
-
-        {/* Logistics Partner Registration Modal */}
-        <LogisticsRegisterModal
-          isOpen={isLogisticsRegisterOpen}
-          onClose={() => setIsLogisticsRegisterOpen(false)}
-        />
-
-        {/* Location Selector Modal */}
-        <LocationSelectorModal
-          isOpen={isLocationModalOpen}
-          onClose={() => setIsLocationModalOpen(false)}
-        />
-
-        {/* Account-First Authentication Interception Modal */}
-        <AuthPromptModal
-          isOpen={Boolean(authPrompt?.isOpen)}
-          onClose={() => setAuthPrompt(null)}
-          title={authPrompt?.title}
-          message={authPrompt?.message}
-          actionType={authPrompt?.actionType}
-          onCreateAccount={handlePromptCreateAccount}
-          onLogin={handlePromptLogin}
-        />
+      {/* Floating Persistent Krishi AI Assistant Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={handleVoiceSearchClick}
+          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
+          title="Open Krishi AI / कृषि AI से बात करें"
+        >
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+            <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+          </div>
+          <span>Krishi AI / कृषि AI</span>
+        </button>
       </div>
-    </ErrorBoundary>
+
+      {/* Global Krishi AI Modal */}
+      <KrishiAiModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        defaultCropId={defaultAiCropId}
+        onNavigate={handleAiNavigate}
+        currentUser={currentUser}
+        currentRole={currentUser?.role}
+        currentView={currentView}
+      />
+
+      {/* Logistics Partner Registration Modal */}
+      <LogisticsRegisterModal
+        isOpen={isLogisticsRegisterOpen}
+        onClose={() => setIsLogisticsRegisterOpen(false)}
+      />
+
+      {/* Location Selector Modal */}
+      <LocationSelectorModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+      />
+
+      {/* Account-First Authentication Interception Modal */}
+      <AuthPromptModal
+        isOpen={Boolean(authPrompt?.isOpen)}
+        onClose={() => setAuthPrompt(null)}
+        title={authPrompt?.title}
+        message={authPrompt?.message}
+        actionType={authPrompt?.actionType}
+        onCreateAccount={handlePromptCreateAccount}
+        onLogin={handlePromptLogin}
+      />
+    </div>
   );
 }

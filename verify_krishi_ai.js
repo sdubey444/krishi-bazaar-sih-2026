@@ -267,6 +267,70 @@ assert(g7.intent === 'WHAT_CAN_AI_DO', 'FAQ: "Krishi AI क्या कर स�
 const g8 = processNaturalQuery('मेरे order का status कैसे check करूं?');
 assert(g8.intent === 'HOW_TO_CHECK_ORDER_STATUS', 'FAQ: "मेरे order का status कैसे check करूं?" understood');
 
+// ----------------------------------------------------
+// 11. AGENTIC BUY / SELL REQUEST TESTS
+// ----------------------------------------------------
+console.log('\n--- 11. AGENTIC BUY / SELL REQUEST TESTS ---');
+
+// Agentic Buy
+const ab1 = processNaturalQuery('500 kilo wheat order karo');
+assert(ab1.intent === 'AGENTIC_BUY_REQUEST', 'Agentic Buy: "500 kilo wheat order karo" detected');
+assert(ab1.intentType === 'agentic_buy', 'Agentic Buy: intentType is agentic_buy');
+assert(ab1.requiresConfirmation === true, 'Agentic Buy: requiresConfirmation is true');
+assert(ab1.quantityKg === 500, 'Agentic Buy: quantity is 500 KG');
+assert(ab1.action?.isAgenticAction === true, 'Agentic Buy: action.isAgenticAction is true');
+assert(ab1.matchResult !== undefined, 'Agentic Buy: matchResult is present');
+
+const ab2 = processNaturalQuery('तुरंत ऑर्डर 10 quintal चावल');
+assert(ab2.intent === 'AGENTIC_BUY_REQUEST', 'Agentic Buy: Hindi "तुरंत ऑर्डर 10 quintal चावल" detected');
+assert(ab2.quantityKg === 1000, 'Agentic Buy: 10 quintal = 1000 KG correctly normalized');
+
+const ab3 = processNaturalQuery('abhi kharido 200 kg mustard');
+assert(ab3.intent === 'AGENTIC_BUY_REQUEST', 'Agentic Buy: "abhi kharido 200 kg mustard" detected');
+assert(ab3.cropId === 'mustard', 'Agentic Buy: crop mustard detected');
+
+// Agentic Sell
+const as1 = processNaturalQuery('500 kg wheat list kar do');
+assert(as1.intent === 'AGENTIC_SELL_REQUEST', 'Agentic Sell: "500 kg wheat list kar do" detected');
+assert(as1.intentType === 'agentic_sell', 'Agentic Sell: intentType is agentic_sell');
+assert(as1.requiresConfirmation === true, 'Agentic Sell: requiresConfirmation is true');
+assert(as1.action?.isAgenticAction === true, 'Agentic Sell: action.isAgenticAction is true');
+
+const as2 = processNaturalQuery('अभी बेचो 1000 kg आलू');
+assert(as2.intent === 'AGENTIC_SELL_REQUEST', 'Agentic Sell: Hindi "अभी बेचो 1000 kg आलू" detected');
+assert(as2.cropId === 'potato', 'Agentic Sell: crop potato detected');
+assert(as2.quantityKg === 1000, 'Agentic Sell: quantity is 1000 KG');
+
+const as3 = processNaturalQuery('listing banao 5 quintal onion');
+assert(as3.intent === 'AGENTIC_SELL_REQUEST', 'Agentic Sell: "listing banao 5 quintal onion" detected');
+assert(as3.quantityKg === 500, 'Agentic Sell: 5 quintal = 500 KG correctly normalized');
+
+// Agentic Store Mutation Test
+const ordersBefore = store.orders.length;
+const newOrder = store.createOrder({
+  produce: 'Wheat',
+  quantity: 500,
+  totalQuantity: 500,
+  unit: 'kg',
+  status: 'Confirmed',
+  buyerName: 'AI Test Buyer'
+});
+assert(store.orders.length === ordersBefore + 1, 'Agentic Store: createOrder increases order count');
+assert(newOrder.id && newOrder.id.startsWith('ORD-'), 'Agentic Store: created order has valid ID');
+assert(newOrder.status === 'Confirmed', 'Agentic Store: created order status is Confirmed');
+
+const listingsBefore = store.listings.length;
+const newListing = store.addListing({
+  produce: 'Rice',
+  cropId: 'rice',
+  quantity: 1000,
+  pricePerKg: 42,
+  location: 'Prayagraj',
+  farmerName: 'AI Test Farmer'
+});
+assert(store.listings.length === listingsBefore + 1, 'Agentic Store: addListing increases listing count');
+assert(newListing.status === 'Active', 'Agentic Store: created listing status is Active');
+
 console.log('\n====================================================');
 console.log(`TEST RESULTS: ${passedTests} / ${totalTests} PASSED`);
 console.log('====================================================\n');

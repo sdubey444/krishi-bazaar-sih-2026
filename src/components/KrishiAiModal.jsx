@@ -312,8 +312,98 @@ export default function KrishiAiModal({
   };
 
   const handleConfirmHighRiskAction = () => {
-    if (pendingConfirmationAction && onNavigate) {
-      onNavigate(pendingConfirmationAction.targetView, pendingConfirmationAction.params);
+    if (!pendingConfirmationAction) return;
+
+    const action = pendingConfirmationAction;
+    const params = action.params || {};
+
+    // ==========================================
+    // AGENTIC BUY: Execute real store.createOrder()
+    // ==========================================
+    if (action.targetView === 'confirm_agentic_buy' && action.isAgenticAction) {
+      try {
+        const newOrder = store.createOrder({
+          produce: params.cropName || 'Wheat',
+          quantity: params.quantity || 500,
+          totalQuantity: params.quantity || 500,
+          unit: params.unit || 'kg',
+          allocations: params.allocations || [],
+          status: 'Confirmed',
+          buyerId: currentUser?.id,
+          buyerName: currentUser?.name || 'AI Buyer',
+          destination: currentUser?.location || 'Prayagraj'
+        });
+
+        const successMsg = {
+          id: `agentic_${Date.now()}`,
+          sender: 'assistant',
+          text: `✅ Order Placed Successfully via Krishi AI!\n\n` +
+            `• Order ID: ${newOrder.id}\n` +
+            `• Produce: ${params.cropName}\n` +
+            `• Quantity: ${(params.quantity || 500).toLocaleString()} KG\n` +
+            `• Total: ₹${(newOrder.totalAmount || 0).toLocaleString()}\n` +
+            `• Status: ${newOrder.status}\n\n` +
+            `Order is now visible in your Buyer Dashboard → Orders tab.`,
+          understoodSummary: '✅ Agentic Order Confirmed',
+          intent: 'AGENTIC_BUY_CONFIRMED',
+          intentType: 'agentic_buy',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, successMsg]);
+      } catch (e) {
+        console.error('Agentic buy error:', e);
+      }
+      setPendingConfirmationAction(null);
+      return;
+    }
+
+    // ==========================================
+    // AGENTIC SELL: Execute real store.addListing()
+    // ==========================================
+    if (action.targetView === 'confirm_agentic_sell' && action.isAgenticAction) {
+      try {
+        const newListing = store.addListing({
+          produce: params.cropName || 'Wheat',
+          cropId: params.cropId || 'wheat',
+          quantity: params.quantity || 500,
+          pricePerKg: params.pricePerKg || 28,
+          unit: params.unit || 'kg',
+          qualityGrade: params.qualityGrade || 'Grade A',
+          location: params.location || currentUser?.location || 'Prayagraj',
+          farmerId: currentUser?.id,
+          farmerName: currentUser?.name || 'Farmer',
+          fpoName: currentUser?.organization || 'FPO'
+        });
+
+        const successMsg = {
+          id: `agentic_${Date.now()}`,
+          sender: 'assistant',
+          text: `✅ Listing Created Successfully via Krishi AI!\n\n` +
+            `• Listing ID: ${newListing.id}\n` +
+            `• Produce: ${params.cropName}\n` +
+            `• Quantity: ${(params.quantity || 500).toLocaleString()} KG\n` +
+            `• Price: ₹${params.pricePerKg || 28}/kg\n` +
+            `• Location: ${params.location || 'Prayagraj'}\n` +
+            `• Status: ${newListing.status}\n\n` +
+            `Listing is now visible in the Marketplace and your Farmer Dashboard.`,
+          understoodSummary: '✅ Agentic Listing Confirmed',
+          intent: 'AGENTIC_SELL_CONFIRMED',
+          intentType: 'agentic_sell',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, successMsg]);
+      } catch (e) {
+        console.error('Agentic sell error:', e);
+      }
+      setPendingConfirmationAction(null);
+      return;
+    }
+
+    // ==========================================
+    // DEFAULT: High-risk navigation confirmation
+    // ==========================================
+    if (onNavigate && action.targetView) {
+      onNavigate(action.targetView, action.params);
       setPendingConfirmationAction(null);
       onClose();
     }

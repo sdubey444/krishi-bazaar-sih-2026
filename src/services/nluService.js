@@ -9,6 +9,7 @@ import { locationService } from './locationService.js';
 import { marketDataService } from './marketDataService.js';
 import { searchAgronomyKnowledgeBase } from '../data/agronomyKnowledgeBase.js';
 import { store } from './store.js';
+import { matchSupply } from './matchingEngine.js';
 
 // Expanded Crop Lexicon for Multilingual Entity Recognition
 export const CROP_SYNONYMS = {
@@ -1128,6 +1129,146 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
         targetView: 'market-intel',
         tool: 'getMarketPrice',
         params: { cropId: crop.id, location: activeLocation }
+      }
+    };
+  }
+
+  // ==========================================
+  // AGENTIC SELL REQUEST (Direct Listing via AI) — checked BEFORE regular sell
+  // Triggers: "list kar do", "daal do", "list karo", "add listing", "अभी बेचो", "लिस्ट कर दो"
+  // ==========================================
+  const isAgenticSell =
+    lower.includes('list kar do') ||
+    lower.includes('list karo') ||
+    lower.includes('daal do') ||
+    lower.includes('dal do') ||
+    lower.includes('add listing') ||
+    lower.includes('abhi becho') ||
+    lower.includes('listing banao') ||
+    lower.includes('listing bana do') ||
+    lower.includes('sell now') ||
+    lower.includes('create listing') ||
+    lower.includes('लिस्ट कर दो') ||
+    lower.includes('लिस्ट करो') ||
+    lower.includes('लिस्टिंग बनाओ') ||
+    lower.includes('अभी बेचो') ||
+    lower.includes('डाल दो');
+
+  if (isAgenticSell) {
+    const sellQtyKg = qty ? qty.normalizedKg : 500;
+    const sellDisplayQty = qty ? qty.displayString : `${sellQtyKg.toLocaleString()} KG`;
+    const priceData = getCropPriceIntelligence(crop.id);
+    const suggestedPrice = priceData.currentPrice || 28;
+
+    return {
+      intent: 'AGENTIC_SELL_REQUEST',
+      intentType: 'agentic_sell',
+      crop: crop.name,
+      cropId: crop.id,
+      quantity: qty ? qty.value : sellQtyKg,
+      unit: qty?.unit || 'kg',
+      quantityKg: sellQtyKg,
+      normalizedKg: sellQtyKg,
+      understoodSummary: `🤖 Agentic Listing: ${sellDisplayQty} of ${crop.emoji} ${crop.name}`,
+      answer: `🤖 Agentic Sell Request Activated!\n\n` +
+        `• Produce: ${crop.emoji} ${crop.name}\n` +
+        `• Listed Volume: ${sellDisplayQty} (${sellQtyKg.toLocaleString()} KG)\n` +
+        `• Suggested Price: ₹${suggestedPrice}/kg (Platform Reference)\n` +
+        `• Quality: Grade A (Verified)\n` +
+        `• Location: ${activeLocation.district || activeLocation.state}\n\n` +
+        `⚡ Confirm below to create listing directly through Krishi AI.`,
+      requiresConfirmation: true,
+      action: {
+        label: `✅ Confirm Listing — ${sellDisplayQty} ${crop.name}`,
+        targetView: 'confirm_agentic_sell',
+        tool: 'agenticSell',
+        isAgenticAction: true,
+        params: {
+          cropId: crop.id,
+          cropName: crop.name,
+          quantity: sellQtyKg,
+          unit: 'kg',
+          pricePerKg: suggestedPrice,
+          location: activeLocation.district || activeLocation.state,
+          qualityGrade: 'Grade A'
+        }
+      }
+    };
+  }
+
+  // ==========================================
+  // AGENTIC BUY REQUEST (Direct Purchase via AI) — checked BEFORE regular buy
+  // Triggers: "order karo", "abhi kharido", "place order", "buy now", "turant order", "तुरंत ऑर्डर"
+  // ==========================================
+  const isAgenticBuy =
+    lower.includes('order karo') ||
+    lower.includes('order kar do') ||
+    lower.includes('order de do') ||
+    lower.includes('abhi kharido') ||
+    lower.includes('buy now') ||
+    lower.includes('place order') ||
+    lower.includes('confirm order') ||
+    lower.includes('turant order') ||
+    lower.includes('turant kharid') ||
+    lower.includes('ऑर्डर करो') ||
+    lower.includes('ऑर्डर कर दो') ||
+    lower.includes('अभी खरीदो') ||
+    lower.includes('तुरंत ऑर्डर') ||
+    lower.includes('तुरंत खरीद');
+
+  if (isAgenticBuy) {
+    const targetQtyKg = qty ? qty.normalizedKg : 500;
+    const targetDisplayQty = qty ? qty.displayString : `${targetQtyKg.toLocaleString()} KG`;
+    const listings = state.listings || [];
+
+    let matchResult;
+    try {
+      matchResult = matchSupply(
+        { cropId: crop.id, produce: crop.name, requiredQuantity: targetQtyKg, unit: 'kg' },
+        listings
+      );
+    } catch (e) {
+      matchResult = { allocations: [], matchedQuantity: 0, fulfillmentPercentage: 0, farmersCount: 0 };
+    }
+
+    const topAllocations = (matchResult.allocations || []).slice(0, 5);
+    const matchSummary = topAllocations.length > 0
+      ? topAllocations.map((a, i) =>
+          `  ${i + 1}. ${a.farmerName} — ${a.location} — ${a.allocatedQuantity.toLocaleString()} KG @ ₹${a.pricePerKg}/kg (₹${a.farmerEarnings.toLocaleString()})`
+        ).join('\n')
+      : '  No matching farmer listings found for this crop.';
+
+    return {
+      intent: 'AGENTIC_BUY_REQUEST',
+      intentType: 'agentic_buy',
+      crop: crop.name,
+      cropId: crop.id,
+      quantity: qty ? qty.value : targetQtyKg,
+      unit: qty?.unit || 'kg',
+      quantityKg: targetQtyKg,
+      normalizedKg: targetQtyKg,
+      matchResult,
+      understoodSummary: `🤖 Agentic Order: ${targetDisplayQty} of ${crop.emoji} ${crop.name}`,
+      answer: `🤖 Agentic Purchase Request Activated!\n\n` +
+        `• Produce: ${crop.emoji} ${crop.name}\n` +
+        `• Requested Volume: ${targetDisplayQty} (${targetQtyKg.toLocaleString()} KG)\n` +
+        `• Matched: ${matchResult.matchedQuantity.toLocaleString()} KG from ${matchResult.farmersCount} farmer(s) (${matchResult.fulfillmentPercentage}%)\n\n` +
+        `Matched Farmer Allocations:\n${matchSummary}\n\n` +
+        `⚡ Confirm below to place order directly through Krishi AI.`,
+      requiresConfirmation: true,
+      action: {
+        label: `✅ Confirm Order — ${targetDisplayQty} ${crop.name}`,
+        targetView: 'confirm_agentic_buy',
+        tool: 'agenticBuy',
+        isAgenticAction: true,
+        params: {
+          cropId: crop.id,
+          cropName: crop.name,
+          quantity: targetQtyKg,
+          unit: 'kg',
+          allocations: topAllocations,
+          matchResult
+        }
       }
     };
   }
