@@ -64,6 +64,8 @@ export default function Navbar({
   } else if (currentUser?.role === 'buyer') {
     navItems.push({ id: 'buyer-dashboard', label: i18n.t('buyerDashboard'), icon: LayoutDashboard });
     navItems.push({ id: 'my-orders', label: i18n.t('myOrders'), icon: PackageCheck });
+  } else if (currentUser?.role === 'logistics') {
+    navItems.push({ id: 'logistics-dashboard', label: i18n.t('logisticsDashboard') || 'Logistics Dashboard', icon: Truck });
   } else if (currentUser?.role === 'admin') {
     navItems.push({ id: 'admin-dashboard', label: i18n.t('adminDashboard'), icon: ShieldCheck });
   }
@@ -98,6 +100,12 @@ export default function Navbar({
           label: i18n.t('roleBuyer'),
           icon: ShoppingBag,
           bg: 'bg-blue-50 text-blue-800 border-blue-200'
+        };
+      case 'logistics':
+        return {
+          label: i18n.t('roleLogistics') || 'Logistics Partner',
+          icon: Truck,
+          bg: 'bg-indigo-50 text-indigo-800 border-indigo-200'
         };
       case 'admin':
         return {
@@ -203,14 +211,14 @@ export default function Navbar({
               <span>Logistics Partner</span>
             </button>
 
-            {/* Prominent Voice Search / Ask AI Button */}
+            {/* Prominent Krishi AI Assistant Button */}
             <button
               onClick={onOpenAiModal}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-brand-600 hover:from-emerald-500 hover:to-brand-500 text-white text-xs font-bold shadow-sm shadow-brand-600/20 transition-all active:scale-95 group"
-              title="Voice Search & AI Assistant"
+              title="Krishi AI / कृषि AI से बात करें"
             >
               <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-              <span>Voice / Ask AI</span>
+              <span>Krishi AI / कृषि AI</span>
             </button>
 
             {/* User Profile & Role Area */}
@@ -351,7 +359,7 @@ export default function Navbar({
               className="min-h-[44px] flex-1 flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-brand-600 text-white font-bold text-xs shadow-xs"
             >
               <Mic className="w-4 h-4 text-amber-300" />
-              <span>Voice / AI</span>
+              <span>Krishi AI / कृषि AI</span>
             </button>
 
             {currentUser ? (

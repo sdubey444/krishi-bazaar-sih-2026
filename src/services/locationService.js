@@ -31,6 +31,49 @@ export const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c);
 };
 
+const HINDI_LOCATION_ALIASES = {
+  'शिमला': { state: 'Himachal Pradesh', district: 'Shimla' },
+  'प्रयागराज': { state: 'Uttar Pradesh', district: 'Prayagraj' },
+  'इलाहाबाद': { state: 'Uttar Pradesh', district: 'Prayagraj' },
+  'नासिक': { state: 'Maharashtra', district: 'Nashik' },
+  'पुणे': { state: 'Maharashtra', district: 'Pune' },
+  'नागपुर': { state: 'Maharashtra', district: 'Nagpur' },
+  'इंदौर': { state: 'Madhya Pradesh', district: 'Indore' },
+  'भोपाल': { state: 'Madhya Pradesh', district: 'Bhopal' },
+  'उज्जैन': { state: 'Madhya Pradesh', district: 'Ujjain' },
+  'लखनऊ': { state: 'Uttar Pradesh', district: 'Lucknow' },
+  'वाराणसी': { state: 'Uttar Pradesh', district: 'Varanasi' },
+  'कानपुर': { state: 'Uttar Pradesh', district: 'Kanpur' },
+  'आगरा': { state: 'Uttar Pradesh', district: 'Agra' },
+  'जयपुर': { state: 'Rajasthan', district: 'Jaipur' },
+  'जोधपुर': { state: 'Rajasthan', district: 'Jodhpur' },
+  'कोटा': { state: 'Rajasthan', district: 'Kota' },
+  'गंगानगर': { state: 'Rajasthan', district: 'Sri Ganganagar' },
+  'श्री गंगानगर': { state: 'Rajasthan', district: 'Sri Ganganagar' },
+  'लुधियाना': { state: 'Punjab', district: 'Ludhiana' },
+  'अमृतसर': { state: 'Punjab', district: 'Amritsar' },
+  'करनाल': { state: 'Haryana', district: 'Karnal' },
+  'हिसार': { state: 'Haryana', district: 'Hisar' },
+  'अहमदाबाद': { state: 'Gujarat', district: 'Ahmedabad' },
+  'राजकोट': { state: 'Gujarat', district: 'Rajkot' },
+  'सूरत': { state: 'Gujarat', district: 'Surat' },
+  'पटना': { state: 'Bihar', district: 'Patna' },
+  'कोलकाता': { state: 'West Bengal', district: 'Kolkata' },
+  'बेंगलुरु': { state: 'Karnataka', district: 'Bengaluru' },
+  'हैदराबाद': { state: 'Telangana', district: 'Hyderabad' },
+  'चेन्नई': { state: 'Tamil Nadu', district: 'Chennai' },
+  'दिल्ली': { state: 'Delhi', district: 'North Delhi' },
+  'उत्तर प्रदेश': { state: 'Uttar Pradesh', district: 'Prayagraj' },
+  'हिमाचल': { state: 'Himachal Pradesh', district: 'Shimla' },
+  'हिमाचल प्रदेश': { state: 'Himachal Pradesh', district: 'Shimla' },
+  'पंजाब': { state: 'Punjab', district: 'Ludhiana' },
+  'हरियाणा': { state: 'Haryana', district: 'Karnal' },
+  'राजस्थान': { state: 'Rajasthan', district: 'Jaipur' },
+  'मध्य प्रदेश': { state: 'Madhya Pradesh', district: 'Indore' },
+  'महाराष्ट्र': { state: 'Maharashtra', district: 'Nashik' },
+  'गुजरात': { state: 'Gujarat', district: 'Ahmedabad' }
+};
+
 class LocationService {
   constructor() {
     this.listeners = new Set();
@@ -254,6 +297,25 @@ class LocationService {
   resolveExplicitLocationFromQuery(queryText) {
     if (!queryText) return null;
     const clean = queryText.toLowerCase();
+
+    // Check Hindi Devanagari location aliases first
+    for (const [hindiName, info] of Object.entries(HINDI_LOCATION_ALIASES)) {
+      if (clean.includes(hindiName.toLowerCase())) {
+        const stateData = INDIA_AGRICULTURAL_HUBS[info.state];
+        const dist = stateData?.districts.find(d => d.name.toLowerCase() === info.district.toLowerCase()) || stateData?.districts[0];
+        if (dist) {
+          return {
+            state: info.state,
+            district: dist.name,
+            mandi: dist.primaryMandis?.[0] || `${dist.name} Mandi`,
+            lat: dist.lat,
+            lng: dist.lng,
+            source: 'query_explicit',
+            matchedToken: dist.name
+          };
+        }
+      }
+    }
 
     // Check states
     for (const [stateName, stateData] of Object.entries(INDIA_AGRICULTURAL_HUBS)) {

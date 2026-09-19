@@ -89,7 +89,8 @@ export default function KrishiAiModal({
 
       recognition.onstart = () => {
         setVoiceState('listening');
-        setStatusNotice(`Listening (${i18n.getLanguageMeta().name})... Speak your question clearly into the microphone.`);
+        const isHi = i18n.getLanguage() === 'hi';
+        setStatusNotice(isHi ? 'सुन रहा हूँ... माइक में स्पष्ट बोलें' : `Listening (${i18n.getLanguageMeta().name})... Speak your query clearly.`);
       };
 
       recognition.onresult = (event) => {
@@ -160,6 +161,8 @@ export default function KrishiAiModal({
 
     setMessages(prev => [...prev, userMessage]);
     setIsProcessing(true);
+    const isHi = i18n.getLanguage() === 'hi';
+    setStatusNotice(isHi ? 'समझ रहा हूँ...' : 'Understanding query...');
 
     try {
       // B. Process Natural Language Understanding (NLU) with active Location Context
@@ -198,12 +201,20 @@ export default function KrishiAiModal({
         aiSource,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-
       setMessages(prev => [...prev, assistantMessage]);
 
-      // If user voice query was a safe direct navigation command, offer immediate confirmation
-      if (isVoice && nluResult.action && !nluResult.requiresConfirmation) {
-        // Voice user can tap or confirm
+      // If user voice query was a safe direct navigation command, execute it safely
+      if (isVoice && nluResult.action && !nluResult.requiresConfirmation && nluResult.intentType === 'navigation') {
+        setStatusNotice(isHi ? 'कर रहा हूँ... ' + (nluResult.action.label || '') : 'Executing action: ' + (nluResult.action.label || ''));
+        setTimeout(() => {
+          if (onNavigate && nluResult.action.targetView) {
+            onNavigate(nluResult.action.targetView, nluResult.action.params);
+            onClose();
+          }
+        }, 1100);
+      } else {
+        setStatusNotice(isHi ? 'पूरा हुआ' : 'Completed');
+        setTimeout(() => setStatusNotice(''), 2500);
       }
     } catch (err) {
       console.error('Error processing query:', err);
@@ -261,17 +272,17 @@ export default function KrishiAiModal({
 
   // Preset prompt chips matching test queries
   const presetQueries = [
-    { label: 'What is the wheat price?', query: 'What is the wheat price?', emoji: '🌾' },
-    { label: 'गेहूँ का प्राइस क्या है?', query: 'गेहूँ का प्राइस क्या है?', emoji: '💰' },
-    { label: 'gehu ka rate kya hai?', query: 'gehu ka rate kya hai?', emoji: '📊' },
-    { label: 'mere area mein wheat ka price batao', query: 'mere area mein wheat ka price batao', emoji: '📍' },
-    { label: 'Prayagraj mein pyaz ka kya bhaav hai?', query: 'Prayagraj mein pyaz ka kya bhaav hai?', emoji: '🧅' },
-    { label: 'mandi khol ke do', query: 'mandi khol ke do', emoji: '🏪' },
-    { label: 'mera order track karo', query: 'mera order track karo', emoji: '🚚' },
-    { label: 'mujhe 50 kilo aloo chahiye', query: 'mujhe 50 kilo aloo chahiye', emoji: '🥔' },
-    { label: 'agle season mein kya ugana chahiye?', query: 'agle season mein kya ugana chahiye?', emoji: '🌱' },
-    { label: 'patti peeli pad rahi hai', query: 'patti peeli pad rahi hai kya kare', emoji: '🍂' },
-    { label: 'ट्रक बुकिंग कैसे करें', query: 'ट्रक बुकिंग कैसे करें', emoji: '🚛' }
+    { label: 'मंडी खोलो', query: 'मंडी खोलो', emoji: '🏪' },
+    { label: 'मुझे 50 किलो आलू चाहिए', query: 'मुझे 50 किलो आलू चाहिए', emoji: '🥔' },
+    { label: 'मेरा ऑर्डर ट्रैक करो', query: 'मेरा ऑर्डर ट्रैक करो', emoji: '🚚' },
+    { label: 'प्रयागराज में प्याज का भाव क्या है?', query: 'प्रयागराज में प्याज का भाव क्या है?', emoji: '🧅' },
+    { label: 'शिमला में सेब का भाव बताओ', query: 'शिमला में सेब का भाव बताओ', emoji: '🍎' },
+    { label: 'अगले सीजन में क्या उगाना चाहिए?', query: 'अगले सीजन में क्या उगाना चाहिए?', emoji: '🌱' },
+    { label: 'गेहूं की खेती कैसे करें?', query: 'गेहूं की खेती कैसे करें?', emoji: '🌾' },
+    { label: 'मेरे प्याज के पत्ते पीले हो रहे हैं', query: 'मेरे प्याज के पत्ते पीले हो रहे हैं', emoji: '🍂' },
+    { label: 'मार्केटप्लेस खोलो', query: 'मार्केटप्लेस खोलो', emoji: '🛒' },
+    { label: 'मेरे प्रोडक्ट दिखाओ', query: 'मेरे प्रोडक्ट दिखाओ', emoji: '📦' },
+    { label: 'लॉजिस्टिक्स खोलो', query: 'लॉजिस्टिक्स खोलो', emoji: '🚛' }
   ];
 
   return (
@@ -286,9 +297,9 @@ export default function KrishiAiModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base tracking-tight">Krishi Sahayak AI</h3>
+                <h3 className="font-extrabold text-base tracking-tight">Krishi AI / कृषि AI</h3>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
-                  Voice + Chat
+                  Krishi AI से बात करें
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-emerald-200/90 mt-0.5">
@@ -530,7 +541,7 @@ export default function KrishiAiModal({
                   ? 'bg-rose-600 text-white animate-pulse ring-4 ring-rose-200'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               }`}
-              title={voiceState === 'listening' ? 'Stop Listening' : 'Tap to Speak (Voice Search)'}
+              title={voiceState === 'listening' ? (isHi ? 'सुनना बंद करें' : 'Stop Listening') : (isHi ? 'बोलने के लिए दबाएं (कृषि AI)' : 'Tap to Speak (Krishi AI)')}
             >
               {voiceState === 'listening' ? (
                 <MicOff className="w-5 h-5 text-amber-300" />

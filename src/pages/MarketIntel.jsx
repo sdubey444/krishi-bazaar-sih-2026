@@ -399,7 +399,7 @@ export default function MarketIntel({ setCurrentView, onOpenAiModal }) {
             className="px-4 py-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold border border-brand-200 shadow-xs transition-colors flex items-center gap-2 min-h-[44px]"
           >
             <Sparkles className="w-4 h-4 text-brand-600" />
-            Ask AI Assistant About {demandForecast.cropName}
+            Ask Krishi AI About {demandForecast.cropName}
           </button>
         </div>
 

@@ -512,7 +512,7 @@ export default function FarmerDashboard({ setCurrentView, setSelectedOrderId, on
             </div>
           </a>
 
-          {/* 6. कृषि सहायक */}
+          {/* 6. कृषि AI */}
           <button
             onClick={onOpenAiModal}
             className="p-3.5 rounded-2xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100/80 text-left transition-all group flex flex-col justify-between shadow-2xs"
@@ -521,8 +521,8 @@ export default function FarmerDashboard({ setCurrentView, setSelectedOrderId, on
               <Bot className="w-5 h-5 text-amber-300" />
             </div>
             <div>
-              <span className="font-black text-sm text-slate-900 block">[ कृषि सहायक ]</span>
-              <span className="text-[11px] text-teal-800 font-semibold block">Krishi Sahayak</span>
+              <span className="font-black text-sm text-slate-900 block">[ कृषि AI ]</span>
+              <span className="text-[11px] text-teal-800 font-semibold block">Krishi AI</span>
               <span className="text-[10px] text-slate-500">बीमारी, खाद, फसल सलाह</span>
             </div>
           </button>
@@ -872,7 +872,7 @@ export default function FarmerDashboard({ setCurrentView, setSelectedOrderId, on
         />
       </div>
 
-      {/* CROP ADVISOR & AI ASSISTANT SECTION */}
+      {/* CROP ADVISOR & KRISHI AI SECTION */}
       <div className="bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-950 text-white rounded-3xl p-6 sm:p-8 border border-emerald-800/80 shadow-md space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-800/60 pb-4">
           <div className="flex items-center gap-3">
@@ -881,10 +881,10 @@ export default function FarmerDashboard({ setCurrentView, setSelectedOrderId, on
             </div>
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
-                Crop Advisor & AI Assistant
+                Krishi AI Advisor
               </span>
               <h3 className="text-xl font-black text-white">
-                Krishi AI Assistant & Crop Advisory
+                Krishi AI / कृषि AI Advisory
               </h3>
             </div>
           </div>
@@ -895,7 +895,7 @@ export default function FarmerDashboard({ setCurrentView, setSelectedOrderId, on
               className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow transition-all flex items-center gap-1.5"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
-              Ask AI Assistant (Voice / Chat)
+              Krishi AI से पूछें (Voice / Chat)
             </button>
             <button
               onClick={() => setCurrentView('market-intel')}

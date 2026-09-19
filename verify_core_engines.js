@@ -12,7 +12,7 @@ import {
   getCropPriceIntelligence,
   getCropSupplyDemandAnalysis 
 } from './src/services/forecastEngine.js';
-import { processNaturalQuery, isHighRiskAction } from './src/services/nluService.js';
+import { processNaturalQuery, isHighRiskAction, KRISHI_AI_TOOLS } from './src/services/nluService.js';
 import { askKrishiAi } from './src/services/geminiService.js';
 import { SEED_USERS, SEED_LISTINGS, SEED_LOGISTICS_PARTNERS } from './src/data/seedData.js';
 import { getCoordinatesForLocation } from './src/data/coordinates.js';
@@ -41,15 +41,16 @@ function assert(condition, testName) {
   }
 }
 
-// 1. ROLE STRUCTURE VERIFICATION (STRICTLY 3 PLATFORM ROLES)
+// 1. ROLE STRUCTURE VERIFICATION (4 PLATFORM ROLES)
 console.log('--- TEST GROUP 1: ROLE SYSTEM VERIFICATION ---');
 const userRoles = new Set(SEED_USERS.map(u => u.role));
 assert(userRoles.has('farmer'), 'Farmer/FPO role exists in system');
 assert(userRoles.has('buyer'), 'Buyer/Consumer role exists in system');
+assert(userRoles.has('logistics'), 'Logistics Partner role exists in system');
 assert(userRoles.has('admin'), 'Admin role exists in system');
 assert(!userRoles.has('bulk_buyer'), 'No "bulk_buyer" role exists in system');
 assert(!userRoles.has('normal_buyer'), 'No "normal_buyer" role exists in system');
-assert(userRoles.size === 3, 'Strictly 3 platform roles (Farmer/FPO, Buyer/Consumer, Admin)');
+assert(userRoles.size === 4, 'Strictly 4 platform roles (Farmer/FPO, Buyer/Consumer, Logistics Partner, Admin)');
 
 // 2. INTERNAL QUANTITY NORMALIZATION & CONFIGURABLE THRESHOLD
 console.log('\n--- TEST GROUP 2: QUANTITY NORMALIZATION & THRESHOLD ---');
@@ -665,6 +666,156 @@ const transparentOrder = store.createOrder({
 assert(transparentOrder.produceAmount === 56000, 'Exact produce payout preserved (₹56,000)');
 assert(transparentOrder.totalAmount === 59000, 'Mathematical total calculation consistent');
 assert(transparentOrder.paymentStatus !== 'PAID_VIA_FAKE_GATEWAY', 'TRUTH PRINCIPLE: No fake bank transaction ID fabricated');
+
+// 21. DYNAMIC IDENTITY & ACCOUNT CREATION
+console.log('\n--- TEST GROUP 21: DYNAMIC IDENTITY & REGISTRATION ---');
+// A. Register new user "Shubham Dubey"
+const registeredUser = store.register({
+  role: 'farmer',
+  name: 'Shubham Dubey',
+  phone: '9876543299',
+  email: 'shubham@krishibazaar.test',
+  location: 'Prayagraj',
+  organization: 'Dubey Organic Farm'
+});
+assert(registeredUser.name === 'Shubham Dubey', 'New account registration creates authentic name "Shubham Dubey"');
+assert(store.currentUser.name === 'Shubham Dubey', 'Current user immediately set to "Shubham Dubey" (NOT Ramesh)');
+assert(store.currentUser.role === 'farmer', 'Current user role correctly set to farmer');
+
+// B. Logout test
+store.logout();
+assert(store.currentUser === null, 'Logout successfully clears active session to null');
+
+// C. Login with registered phone number
+const reLoggedIn = store.login('farmer', '9876543299', 'password123');
+assert(reLoggedIn.name === 'Shubham Dubey', 'Login with phone automatically retrieves saved name "Shubham Dubey"');
+assert(store.currentUser.name === 'Shubham Dubey', 'Store displays "Shubham Dubey" after existing account login');
+
+// D. Register new Logistics Partner
+const logisticsUser = store.register({
+  role: 'logistics',
+  name: 'Vikram Singh Transport',
+  phone: '9876543288',
+  vehicleNumber: 'UP78 XY 9999',
+  capacityTons: 10
+});
+assert(logisticsUser.role === 'logistics', 'Registration correctly creates dedicated Logistics Partner role');
+assert(logisticsUser.name === 'Vikram Singh Transport', 'Logistics Partner name preserved dynamically');
+
+// 22. LOGISTICS PARTNER ASSIGNED ORDERS & STATE MACHINE
+console.log('\n--- TEST GROUP 22: LOGISTICS PARTNER WORKFLOW & STATE MACHINE ---');
+const testLogisticsOrder = store.createOrder({
+  buyerId: 'buyer_test_1',
+  buyerName: 'Mega Food Parks Ltd',
+  farmerId: registeredUser.id,
+  farmerName: registeredUser.name,
+  produce: 'Potato',
+  quantity: 50,
+  unit: 'Quintal',
+  totalQuantity: 5000,
+  pricePerKg: 25,
+  produceAmount: 125000,
+  deliveryMethod: 'Logistics Support',
+  fulfillmentMethod: 'logistics',
+  logisticsCost: 4500,
+  status: 'Confirmed'
+});
+assert(Boolean(testLogisticsOrder.id), 'Logistics test order created successfully');
+
+// Test sequential status transitions:
+// ASSIGNED -> PICKED UP -> DISPATCHED -> IN TRANSIT -> DELIVERED
+store.updateOrderStatus(testLogisticsOrder.id, 'Assigned');
+let updatedOrd = store.orders.find(o => o.id === testLogisticsOrder.id);
+assert(updatedOrd.status === 'Assigned', 'Status progresses to "Assigned"');
+
+store.updateOrderStatus(testLogisticsOrder.id, 'Picked Up');
+updatedOrd = store.orders.find(o => o.id === testLogisticsOrder.id);
+assert(updatedOrd.status === 'Picked Up', 'Status progresses to "Picked Up"');
+
+store.updateOrderStatus(testLogisticsOrder.id, 'Dispatched');
+updatedOrd = store.orders.find(o => o.id === testLogisticsOrder.id);
+assert(updatedOrd.status === 'Dispatched', 'Status progresses to "Dispatched"');
+
+store.updateOrderStatus(testLogisticsOrder.id, 'In Transit');
+updatedOrd = store.orders.find(o => o.id === testLogisticsOrder.id);
+assert(updatedOrd.status === 'In Transit', 'Status progresses to "In Transit"');
+
+store.updateOrderStatus(testLogisticsOrder.id, 'Delivered');
+updatedOrd = store.orders.find(o => o.id === testLogisticsOrder.id);
+assert(updatedOrd.status === 'Delivered', 'Status progresses to "Delivered"');
+assert(updatedOrd.statusHistory.length >= 5, 'Status history tracks complete milestone checkpoint progression');
+
+// 23. REAL PROTOTYPE PRODUCT CREATION & DISCOVERY
+console.log('\n--- TEST GROUP 23: REAL PRODUCE CREATION & MARKETPLACE DISCOVERY ---');
+const newPotatoListing = store.addListing({
+  farmerId: registeredUser.id,
+  farmerName: registeredUser.name,
+  fpoName: registeredUser.organization,
+  produce: 'Potato',
+  cropId: 'potato',
+  category: 'Vegetables',
+  quantity: 500,
+  availableQuantity: 500,
+  unit: 'kg',
+  pricePerKg: 25,
+  location: 'Prayagraj',
+  qualityGrade: 'Grade A',
+  description: 'Farm-fresh table potatoes.'
+});
+assert(Boolean(newPotatoListing.id), 'Farmer adds new product: Potato 500 KG at ₹25/KG');
+assert(newPotatoListing.farmerName === 'Shubham Dubey', 'Produce listing attributed to logged-in user "Shubham Dubey"');
+assert(newPotatoListing.availableQuantity === 500, 'Listing stored with 500 KG in prototype state');
+const marketplaceItem = store.listings.find(l => l.id === newPotatoListing.id);
+assert(Boolean(marketplaceItem), 'New product lot immediately discoverable on public marketplace for buyers');
+assert(marketplaceItem.status === 'Active', 'Newly added product status is Active');
+
+// 24. KRISHI AI EXPANDED NATURAL LANGUAGE QUERIES & TOOLS
+console.log('\n--- TEST GROUP 24: KRISHI AI NATURAL QUERIES & WEBSITE TOOLS ---');
+const qMandi = processNaturalQuery('मंडी खोलो');
+assert(qMandi.intent === 'OPEN_MARKET', 'Krishi AI recognizes "मंडी खोलो" as OPEN_MARKET');
+assert(qMandi.action.targetView === 'marketplace', '"मंडी खोलो" routes to marketplace');
+
+const qMarketplace = processNaturalQuery('मार्केटप्लेस खोलो');
+assert(qMarketplace.intent === 'OPEN_MARKET', 'Krishi AI recognizes "मार्केटप्लेस खोलो" as OPEN_MARKET');
+
+const qFarmerProducts = processNaturalQuery('मेरे प्रोडक्ट दिखाओ');
+assert(qFarmerProducts.intent === 'VIEW_FARMER_PRODUCTS', 'Krishi AI recognizes "मेरे प्रोडक्ट दिखाओ" as VIEW_FARMER_PRODUCTS');
+assert(qFarmerProducts.action.targetView === 'farmer-dashboard', '"मेरे प्रोडक्ट दिखाओ" routes to farmer-dashboard');
+
+const qLogistics = processNaturalQuery('लॉजिस्टिक्स खोलो');
+assert(qLogistics.action.targetView === 'logistics', 'Krishi AI recognizes "लॉजिस्टिक्स खोलो" and routes to logistics');
+
+const qAloo = processNaturalQuery('मुझे 50 किलो आलू चाहिए');
+assert(qAloo.intent === 'PURCHASE_PRODUCT', 'Krishi AI recognizes "मुझे 50 किलो आलू चाहिए" as PURCHASE_PRODUCT');
+assert(qAloo.normalizedKg === 50, '"मुझे 50 किलो आलू चाहिए" normalizes to 50 KG');
+
+const qTrack = processNaturalQuery('मेरा ऑर्डर ट्रैक करो');
+assert(qTrack.intent === 'TRACK_ORDER', 'Krishi AI recognizes "मेरा ऑर्डर ट्रैक करो" as TRACK_ORDER');
+assert(qTrack.action.targetView === 'order-details', '"मेरा ऑर्डर ट्रैक करो" routes to order-details');
+
+const qShimla = processNaturalQuery('शिमला में सेब का भाव बताओ');
+assert(qShimla.intent === 'MARKET_PRICE_QUERY', 'Krishi AI recognizes "शिमला में सेब का भाव बताओ" as MARKET_PRICE_QUERY');
+assert(qShimla.cropId === 'apple', '"शिमला में सेब का भाव बताओ" extracts apple');
+assert(qShimla.location.district === 'Shimla', '"शिमला में सेब का भाव बताओ" extracts Shimla');
+
+const qPrayagraj = processNaturalQuery('प्रयागराज में प्याज का भाव क्या है?');
+assert(qPrayagraj.intent === 'MARKET_PRICE_QUERY', 'Krishi AI recognizes "प्रयागराज में प्याज का भाव क्या है?" as MARKET_PRICE_QUERY');
+assert(qPrayagraj.cropId === 'onion', '"प्रयागराज में प्याज का भाव क्या है?" extracts onion');
+
+const qAgleSeason = processNaturalQuery('अगले सीजन में क्या उगाना चाहिए?');
+assert(qAgleSeason.intent === 'CROP_PLANNING', 'Krishi AI recognizes "अगले सीजन में क्या उगाना चाहिए?" as CROP_PLANNING');
+
+const qWheatFarming = processNaturalQuery('गेहूं की खेती कैसे करें?');
+assert(qWheatFarming.intent === 'AGRONOMY_ADVISORY', 'Krishi AI recognizes "गेहूं की खेती कैसे करें?" as AGRONOMY_ADVISORY');
+
+const qPeelePatte = processNaturalQuery('मेरे प्याज के पत्ते पीले हो रहे हैं');
+assert(qPeelePatte.intent === 'AGRONOMY_ADVISORY', 'Krishi AI recognizes "मेरे प्याज के पत्ते पीले हो रहे हैं" as AGRONOMY_ADVISORY');
+
+assert(typeof KRISHI_AI_TOOLS.openMarketplace === 'function', 'KRISHI_AI_TOOLS exports openMarketplace()');
+assert(typeof KRISHI_AI_TOOLS.openFarmerProducts === 'function', 'KRISHI_AI_TOOLS exports openFarmerProducts()');
+assert(typeof KRISHI_AI_TOOLS.openLogistics === 'function', 'KRISHI_AI_TOOLS exports openLogistics()');
+assert(typeof KRISHI_AI_TOOLS.trackOrder === 'function', 'KRISHI_AI_TOOLS exports trackOrder()');
+assert(typeof KRISHI_AI_TOOLS.prepareOrder === 'function', 'KRISHI_AI_TOOLS exports prepareOrder()');
 
 console.log('\n====================================================');
 

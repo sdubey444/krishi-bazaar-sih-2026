@@ -16,7 +16,8 @@ import {
   AlertCircle,
   Building2,
   Check,
-  Users
+  Users,
+  Truck
 } from 'lucide-react';
 
 export default function AuthPage({
@@ -83,6 +84,20 @@ export default function AuthPage({
       buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white',
       defaultEmail: 'procurement@avadhagro.in',
       defaultName: 'Avadh Agro Mills (Buyer)'
+    },
+    {
+      id: 'logistics',
+      name: 'Logistics Partner',
+      tagline: 'Transport agricultural produce from farms to buyers.',
+      details: 'Accept consolidated pickup orders, optimize highway transit routes, and update physical delivery checkpoints.',
+      icon: Truck,
+      color: 'indigo',
+      bgActive: 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-950',
+      badgeBg: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      iconBg: 'bg-indigo-100 text-indigo-700',
+      buttonBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+      defaultEmail: 'rajesh.logistics@krishibazaar.in',
+      defaultName: 'Rajesh Kumar (Logistics Partner)'
     },
     {
       id: 'admin',
@@ -165,8 +180,8 @@ export default function AuthPage({
         user = store.register({
           role,
           name: name.trim(),
-          organization: organization.trim() || (role === 'farmer' ? 'Kisan Member' : 'Individual Buyer'),
-          location: location.trim() || 'Lucknow',
+          organization: organization.trim() || (role === 'farmer' ? 'Kisan Member' : role === 'buyer' ? 'Individual Buyer' : role === 'logistics' ? 'Express Krishi Transport' : 'Krishi Directorate'),
+          location: location.trim() || 'Prayagraj',
           email: emailOrPhone.includes('@') ? emailOrPhone.trim() : `${role}_${Date.now()}@krishibazaar.in`,
           phone: !emailOrPhone.includes('@') ? emailOrPhone.trim() : '+91 98765 43210',
           password
@@ -175,8 +190,8 @@ export default function AuthPage({
       } else {
         user = store.login(
           role,
-          name.trim() || currentRoleConfig.defaultName,
-          emailOrPhone.includes('@') ? emailOrPhone.trim() : null
+          emailOrPhone.trim(),
+          password
         );
         setSuccessMessage(`Login successful! Welcome back, ${user.name}.`);
       }
@@ -193,7 +208,7 @@ export default function AuthPage({
         } else if (returnAction === 'bulk-requirement') {
           setCurrentView('bulk-requirement');
         } else if (returnAction === 'voice') {
-          setCurrentView(role === 'farmer' ? 'farmer-dashboard' : 'buyer-dashboard');
+          setCurrentView(role === 'farmer' ? 'farmer-dashboard' : role === 'logistics' ? 'logistics-dashboard' : 'buyer-dashboard');
         } else if (returnAction === 'order') {
           setCurrentView('marketplace');
         } else {
@@ -202,6 +217,8 @@ export default function AuthPage({
             setCurrentView('farmer-dashboard');
           } else if (role === 'buyer') {
             setCurrentView('buyer-dashboard');
+          } else if (role === 'logistics') {
+            setCurrentView('logistics-dashboard');
           } else if (role === 'admin') {
             setCurrentView('admin-dashboard');
           }
@@ -256,7 +273,7 @@ export default function AuthPage({
           STEP 1: ROLE SELECTION SCREEN
           ========================================================================= */}
       {authStep === 'role-select' && (
-        <div className="space-y-6 max-w-2xl mx-auto">
+        <div className="space-y-6 max-w-5xl mx-auto">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
               <span className="text-xs font-black uppercase tracking-wider text-brand-700 block">
@@ -271,8 +288,8 @@ export default function AuthPage({
             </span>
           </div>
 
-          {/* Exactly 3 Role Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* 4 Distinct Role Options */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {roles.map((role) => {
               const Icon = role.icon;
               const isSelected = selectedRole === role.id;
@@ -583,7 +600,7 @@ export default function AuthPage({
           Click any role below to bypass manual entry and test the platform immediately:
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <button
             onClick={() => handleQuickDemoLogin('farmer_a', 'farmer-dashboard')}
             className="p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 font-bold text-left transition-all hover:scale-[1.02] active:scale-95 group"
@@ -609,6 +626,20 @@ export default function AuthPage({
             <div className="text-white mt-1">Avadh Agro Mills (Lucknow)</div>
             <span className="text-[11px] text-slate-400 font-normal block mt-0.5">
               Bulk & Direct Orders • Buyer Dashboard
+            </span>
+          </button>
+
+          <button
+            onClick={() => handleQuickDemoLogin('logistics_1', 'logistics-dashboard')}
+            className="p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 font-bold text-left transition-all hover:scale-[1.02] active:scale-95 group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-indigo-400 font-black">🚚 Logistics Partner</span>
+              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded">Transporter</span>
+            </div>
+            <div className="text-white mt-1">Rajesh Kumar (UP70 AB 1234)</div>
+            <span className="text-[11px] text-slate-400 font-normal block mt-0.5">
+              Assigned Pickups & Transit • Logistics Dashboard
             </span>
           </button>
 

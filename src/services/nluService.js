@@ -132,7 +132,7 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
   const qty = extractQuantity(query);
 
   // 1. OPEN MARKET INTENT
-  // "mandi khol ke do", "mandi kholo", "open marketplace", "market dekho", "मंडी खोल के दो", "मंडी खोलो"
+  // "mandi khol ke do", "mandi kholo", "open marketplace", "market dekho", "मंडी खोल के दो", "मंडी खोलो", "मार्केटप्लेस खोलो"
   const isOpenMarket =
     lower.includes('mandi khol') ||
     lower.includes('mandi kho') ||
@@ -140,9 +140,25 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
     lower.includes('bazar khol') ||
     lower.includes('open market') ||
     lower.includes('open marketplace') ||
+    lower.includes('marketplace khol') ||
+    lower.includes('मार्केटप्लेस खोल') ||
+    lower.includes('मार्केटप्लेस खोलो') ||
+    lower.includes('मार्केट खोलो') ||
     lower.includes('मंडी खोल') ||
     lower.includes('मंडी खोलो') ||
     lower.includes('बाज़ार खोलो');
+
+  // 1B. VIEW FARMER PRODUCTS / MY LISTINGS INTENT
+  // "mere product dikhao", "mere product", "मेरे प्रोडक्ट दिखाओ", "मेरे प्रोडक्ट", "मेरी फसल"
+  const isOpenFarmerProducts =
+    lower.includes('mere product') ||
+    lower.includes('mere fasal') ||
+    lower.includes('mere listing') ||
+    lower.includes('मेरे प्रोडक्ट') ||
+    lower.includes('मेरी फसल') ||
+    lower.includes('मेरे उत्पाद') ||
+    lower.includes('my products') ||
+    lower.includes('my listings');
 
   // 2. TRACK ORDER INTENT
   // "mera order track karo", "order status", "track my order", "ट्रैक करो", "ऑर्डर ट्रैक"
@@ -231,6 +247,18 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
 
   // 8. AGRONOMY & CROP HEALTH INTENT (Yellow leaves, disease, pest, fertilizer, irrigation)
   const agronomyMatch = searchAgronomyKnowledgeBase(query);
+  const isAgronomyQuery =
+    Boolean(agronomyMatch) ||
+    lower.includes('farming') ||
+    lower.includes('cultivation') ||
+    lower.includes('kheti kaise') ||
+    lower.includes('kheti') ||
+    lower.includes('खेती कैसे') ||
+    lower.includes('खेती') ||
+    lower.includes('bimari') ||
+    lower.includes('रोग') ||
+    lower.includes('बीमारी') ||
+    lower.includes('कीट');
 
   // 9. SEARCH LISTINGS INTENT
   const isSearch =
@@ -260,7 +288,9 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
     lower.includes('भाड़ा') ||
     lower.includes('भाडा') ||
     lower.includes('डिलीवरी') ||
-    lower.includes('पिकअप');
+    lower.includes('पिकअप') ||
+    lower.includes('लॉजिस्टिक्स') ||
+    lower.includes('लॉजिस्टिक्स खोलो');
 
   // 11. HIGH-RISK IRREVERSIBLE ACTIONS (Requires explicit user confirmation)
   const isHighRisk =
@@ -301,7 +331,25 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
       action: {
         label: 'Open Marketplace',
         targetView: 'marketplace',
+        tool: 'openMarketplace',
         params: {}
+      }
+    };
+  }
+
+  // A2. VIEW FARMER PRODUCTS INTENT
+  if (isOpenFarmerProducts) {
+    return {
+      intent: 'VIEW_FARMER_PRODUCTS',
+      intentType: 'navigation',
+      crop: crop.name,
+      understoodSummary: `🌾 Understood: View Farmer Produce Listings`,
+      answer: `Opening your produce listings and harvest inventory on the Farmer Dashboard.`,
+      action: {
+        label: 'Open My Listings',
+        targetView: 'farmer-dashboard',
+        tool: 'openFarmerProducts',
+        params: { tab: 'listings' }
       }
     };
   }
@@ -467,24 +515,30 @@ Note: Agricultural recommendations are based on agro-climatic zone data. Profits
     };
   }
 
-  // H. AGRONOMY & CROP HEALTH INTENT (Yellow leaves, disease, fertilizer, irrigation)
-  if (agronomyMatch) {
+  // H. AGRONOMY & CROP HEALTH INTENT (Yellow leaves, disease, fertilizer, irrigation, cultivation)
+  if (isAgronomyQuery) {
+    const match = agronomyMatch || {
+      title: `${crop.name} Cultivation & Agronomy Advisory`,
+      summary: `Scientific cultivation, sowing, and disease management guidance for ${crop.name}.`,
+      remedy: `• Seed Rate: Follow ICAR-approved seed rates and fungicide seed treatment.\n• Fertilizer: Apply balanced NPK based on Soil Health Card recommendations.\n• Irrigation: Water during critical vegetative and flowering stages.\n• Pest/Disease: Regular field scouting to detect early infection symptoms.`,
+      topicId: `${crop.id}_farming`
+    };
     return {
       intent: 'AGRONOMY_ADVISORY',
       intentType: 'advisory',
-      understoodSummary: `🌾 Understood: ${agronomyMatch.title}`,
-      answer: `${agronomyMatch.title}
+      understoodSummary: `🌾 Understood: ${match.title}`,
+      answer: `${match.title}
 
-${agronomyMatch.summary}
+${match.summary}
 
 Scientific Recommendations:
-${agronomyMatch.remedy}
+${match.remedy}
 
 Source: ICAR & Krishi Vigyan Kendra (KVK) verified agricultural guidelines.`,
       action: {
         label: 'Open Krishi Sahayak Assistant',
         targetView: 'farmer-dashboard',
-        params: { agronomyTopic: agronomyMatch.topicId }
+        params: { agronomyTopic: match.topicId }
       }
     };
   }
@@ -602,4 +656,22 @@ export const isHighRiskAction = (intent, params = {}) => {
   if (highRiskIntents.includes(intent.toUpperCase())) return true;
   if (params?.isHighRisk || params?.action === 'delete' || params?.action === 'pay') return true;
   return false;
+};
+
+/**
+ * Structured Tool Catalog for Website Control
+ */
+export const KRISHI_AI_TOOLS = {
+  openMarketplace: () => ({ targetView: 'marketplace' }),
+  openMandi: (cropId, location) => ({ targetView: 'market-intel', params: { cropId, location } }),
+  searchProduct: (cropId, query) => ({ targetView: 'marketplace', params: { cropId, query } }),
+  prepareOrder: (cropId, quantity, unit) => ({ targetView: 'bulk-requirement', params: { cropId, quantity, unit } }),
+  openOrders: () => ({ targetView: 'my-orders' }),
+  trackOrder: (orderId) => ({ targetView: 'order-details', params: { orderId } }),
+  openFarmerProducts: () => ({ targetView: 'farmer-dashboard', params: { tab: 'listings' } }),
+  openLogistics: () => ({ targetView: 'logistics' }),
+  getMarketPrice: (cropId, location) => ({ cropId, location }),
+  getCropRecommendation: (season, location) => ({ season, location }),
+  getDemandForecast: (cropId) => ({ cropId }),
+  changeLocation: (location) => ({ location })
 };

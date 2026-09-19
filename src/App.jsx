@@ -22,6 +22,7 @@ import MarketIntel from './pages/MarketIntel';
 import FarmerDashboard from './pages/FarmerDashboard';
 import BuyerDashboard from './pages/BuyerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import LogisticsPartnerDashboard from './pages/LogisticsPartnerDashboard';
 import AuthPage from './pages/AuthPage';
 
 export default function App() {
@@ -90,6 +91,8 @@ export default function App() {
       setCurrentView('farmer-dashboard');
     } else if (user?.role === 'buyer') {
       setCurrentView('buyer-dashboard');
+    } else if (user?.role === 'logistics') {
+      setCurrentView('logistics-dashboard');
     } else if (user?.role === 'admin') {
       setCurrentView('admin-dashboard');
     }
@@ -153,6 +156,8 @@ export default function App() {
         setCurrentView('farmer-dashboard');
       } else if (user?.role === 'buyer') {
         setCurrentView('buyer-dashboard');
+      } else if (user?.role === 'logistics') {
+        setCurrentView('logistics-dashboard');
       } else if (user?.role === 'admin') {
         setCurrentView('admin-dashboard');
       } else {
@@ -164,8 +169,8 @@ export default function App() {
   const handleVoiceSearchClick = () => {
     if (!currentUser) {
       triggerAuthRequired({
-        title: 'Please Log In to Use Voice Search',
-        message: 'Please create an account or log in to continue with AI Voice Search.',
+        title: 'Please Log In to Use Krishi AI',
+        message: 'Please create an account or log in to continue with Krishi AI.',
         actionType: 'voice',
         returnAction: 'voice'
       });
@@ -227,8 +232,8 @@ export default function App() {
             onOpenAiModal={(cropId) => {
               if (!currentUser) {
                 triggerAuthRequired({
-                  title: 'Please Log In to Use Voice Search',
-                  message: 'Please create an account or log in to continue with AI Voice Search.',
+                  title: 'Please Log In to Use Krishi AI',
+                  message: 'Please create an account or log in to continue with Krishi AI.',
                   actionType: 'voice',
                   returnAction: 'voice'
                 });
@@ -265,6 +270,15 @@ export default function App() {
       case 'admin-dashboard':
         return (
           <AdminDashboard
+            setCurrentView={setCurrentView}
+            setSelectedOrderId={setSelectedOrderId}
+          />
+        );
+
+      case 'logistics-partner':
+      case 'logistics-dashboard':
+        return (
+          <LogisticsPartnerDashboard
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
           />
@@ -334,17 +348,17 @@ export default function App() {
       {/* Platform Footer */}
       <Footer setCurrentView={setCurrentView} />
 
-      {/* Floating Persistent Voice Assistant / Ask AI Button */}
+      {/* Floating Persistent Krishi AI Assistant Button */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
           onClick={handleVoiceSearchClick}
           className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
-          title="Open Voice Search & Ask AI"
+          title="Open Krishi AI / कृषि AI से बात करें"
         >
           <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
             <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
           </div>
-          <span>Voice Search / Ask AI</span>
+          <span>Krishi AI / कृषि AI</span>
         </button>
       </div>
 

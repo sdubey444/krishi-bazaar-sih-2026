@@ -14,9 +14,10 @@ export const askKrishiAi = async (query, contextData = {}) => {
   if (apiKey && apiKey !== 'your_gemini_api_key') {
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const systemInstruction = `You are Krishi Sahayak, the intelligent agricultural advisor for Krishi Bazaar.
+      const systemInstruction = `You are Krishi AI, the official intelligent agricultural assistant of Krishi Bazaar.
 Provide practical, scientific agronomy advice and market insights for Indian farmers.
-Always be direct, compassionate, and farmer-friendly.
+Always be direct, compassionate, authentic, and farmer-friendly.
+Support Hindi, Hinglish, and English naturally.
 Do not invent prices or fake statistics.
 Context Data:
 Crop: ${series.cropName} (${series.category})
@@ -60,8 +61,8 @@ Supply Status: ${series.supplyStatus}`;
   const agronomyMatch = searchAgronomyKnowledgeBase(query);
   if (agronomyMatch && !qLower.includes('price') && !qLower.includes('rate') && !qLower.includes('bhav') && !qLower.includes('daam')) {
     return {
-      source: 'Krishi Verified Agronomy Knowledge Base (Offline Reference - Add VITE_GEMINI_API_KEY for Live Gemini AI)',
-      text: `🌾 ${agronomyMatch.title}\n\n${agronomyMatch.summary}\n\nRecommendations:\n${agronomyMatch.remedy}\n\nNote: Grounded agricultural science guidance. Add VITE_GEMINI_API_KEY in environment for live conversational Gemini AI.`
+      source: 'Krishi AI Agronomy Knowledge Base (ICAR / Grounded Offline Reference)',
+      text: `🌾 ${agronomyMatch.title}\n\n${agronomyMatch.summary}\n\nRecommendations:\n${agronomyMatch.remedy}\n\nNote: Grounded agricultural science guidance. Configure VITE_GEMINI_API_KEY in environment for live conversational Gemini AI.`
     };
   }
 

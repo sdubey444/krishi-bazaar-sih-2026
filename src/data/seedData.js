@@ -81,6 +81,20 @@ export const SEED_USERS = [
     email: 'sunita.m@gmail.com'
   },
 
+  // 1 Logistics Partner
+  {
+    id: 'logistics_1',
+    name: 'Rajesh Kumar (Logistics Partner)',
+    role: 'logistics',
+    organization: 'Express Krishi Transport',
+    vehicleNumber: 'UP70 AB 1234',
+    vehicleType: 'Mini Truck (Tata 407)',
+    capacityTons: 5,
+    location: 'Prayagraj',
+    phone: '+91 98765 67890',
+    email: 'rajesh.logistics@krishibazaar.in'
+  },
+
   // 1 Admin
   {
     id: 'admin_1',

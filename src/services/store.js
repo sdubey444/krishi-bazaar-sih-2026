@@ -48,7 +48,7 @@ class Store {
         this.requirements = [...SEED_REQUIREMENTS];
         this.orders = [...SEED_ORDERS];
         this.logisticsPartners = [...SEED_LOGISTICS_PARTNERS];
-        this.currentUser = this.users[0];
+        this.currentUser = null;
       }
     } catch (e) {
       this.users = [...SEED_USERS];
@@ -116,12 +116,16 @@ class Store {
     const role = (userData.role || 'farmer').toLowerCase();
     const newUser = {
       id: `${role}_${Date.now()}`,
-      name: userData.name || (role === 'farmer' ? 'Kisan Member' : 'Buyer Member'),
+      name: userData.name?.trim() || (role === 'farmer' ? 'Kisan Member' : role === 'buyer' ? 'Buyer Member' : role === 'logistics' ? 'Logistics Partner' : 'Admin Directorate'),
       role,
       location: userData.location || 'Prayagraj',
-      organization: userData.organization || (role === 'farmer' ? 'Kisan Cooperative Union' : 'Agro Foods Ltd'),
-      email: userData.email || `${role}@krishibazaar.in`,
-      phone: userData.phone || '+91 98765 43210',
+      organization: userData.organization || (role === 'farmer' ? 'Kisan Cooperative Union' : role === 'buyer' ? 'Agro Foods Ltd' : role === 'logistics' ? 'Express Krishi Transport' : 'Krishi Directorate'),
+      email: userData.email?.trim() || `${role}_${Date.now()}@krishibazaar.in`,
+      phone: userData.phone?.trim() || '+91 98765 43210',
+      password: userData.password || 'password123',
+      vehicleNumber: userData.vehicleNumber || (role === 'logistics' ? 'UP70 AB 1234' : undefined),
+      vehicleType: userData.vehicleType || (role === 'logistics' ? 'Mini Truck (Tata 407)' : undefined),
+      capacityTons: userData.capacityTons || (role === 'logistics' ? 5 : undefined),
       createdAt: new Date().toISOString()
     };
     this.users.unshift(newUser);
@@ -130,35 +134,73 @@ class Store {
     return newUser;
   }
 
-  login(role, customName = null, email = null) {
-    let user;
-    if (email) {
-      user = this.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+  login(roleOrId, identifier = null, password = null) {
+    let role = roleOrId;
+    let actualId = identifier;
+
+    // If identifier not provided as 2nd param, inspect first param
+    if (!actualId && roleOrId) {
+      const isRole = ['farmer', 'buyer', 'logistics', 'admin'].includes(String(roleOrId).toLowerCase());
+      if (!isRole || String(roleOrId).includes('@') || /\d{5,}/.test(String(roleOrId))) {
+        actualId = roleOrId;
+        const low = String(roleOrId).toLowerCase();
+        if (low.includes('admin')) {
+          role = 'admin';
+        } else if (low.includes('logistics') || low.includes('transport') || low.includes('driver')) {
+          role = 'logistics';
+        } else if (low.includes('buyer') || low.includes('procurement')) {
+          role = 'buyer';
+        } else {
+          role = null;
+        }
+      }
     }
+
+    let user = null;
+    const cleanId = (actualId || '').trim().toLowerCase();
+    const digits = cleanId.replace(/\D/g, '');
+
+    // 1. Search existing users by email, phone, or name
+    if (cleanId) {
+      user = this.users.find(u => {
+        const uEmail = (u.email || '').toLowerCase();
+        const uPhone = (u.phone || '').replace(/\D/g, '');
+        const uName = (u.name || '').toLowerCase();
+        
+        if (uEmail === cleanId || (u.id || '').toLowerCase() === cleanId) return true;
+        if (cleanId.includes('admin') && u.role === 'admin') return true;
+        if (digits.length >= 7 && uPhone.includes(digits)) return true;
+        if (uName === cleanId) return true;
+        return false;
+      });
+    }
+
+    // 2. Match by role from existing users if no exact identifier matched
     if (!user && role) {
-      user = this.users.find(u => u.role.toLowerCase() === role.toLowerCase());
+      user = this.users.find(u => u.role.toLowerCase() === String(role).toLowerCase());
     }
+
+    // 3. If still no user exists, create prototype user
     if (!user) {
+      const isEmail = cleanId.includes('@');
       user = {
-        id: `user_${Date.now()}`,
-        name: customName || (role === 'farmer' ? 'New Farmer FPO' : 'New Buyer Co.'),
+        id: `${(role || 'farmer').toLowerCase()}_${Date.now()}`,
+        name: cleanId ? (cleanId.charAt(0).toUpperCase() + cleanId.slice(1)) : (role === 'farmer' ? 'Farmer Member' : role === 'buyer' ? 'Buyer Member' : role === 'logistics' ? 'Logistics Partner' : 'Admin Directorate'),
         role: (role || 'farmer').toLowerCase(),
         location: 'Prayagraj',
-        phone: '+91 98000 00000',
-        email: email || `${(role || 'farmer').toLowerCase()}@krishibazaar.in`
+        phone: !isEmail && cleanId ? cleanId : '+91 98000 00000',
+        email: isEmail ? cleanId : `${(role || 'farmer').toLowerCase()}@krishibazaar.in`,
+        password: password || 'password123'
       };
-      this.users.push(user);
+      this.users.unshift(user);
     }
-    if (customName && user.name.startsWith('New Farmer')) {
-      user.name = customName;
-    }
+
     this.currentUser = user;
     this.save();
     return user;
   }
 
   logout() {
-    // Return to default visitor or guest
     this.currentUser = null;
     this.save();
   }
@@ -323,6 +365,7 @@ class Store {
       return order;
     });
     this.save();
+    return this.orders.find(o => o.id === orderId);
   }
 
   registerLogisticsPartner(partnerData) {
@@ -377,7 +420,7 @@ class Store {
     this.requirements = [...SEED_REQUIREMENTS];
     this.orders = [...SEED_ORDERS];
     this.logisticsPartners = [...SEED_LOGISTICS_PARTNERS];
-    this.currentUser = this.users[0];
+    this.currentUser = null;
     this.save();
   }
 }

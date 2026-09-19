@@ -16,7 +16,7 @@ export const AGRONOMY_TOPICS = [
   },
   {
     topicId: 'wheat_farming',
-    keywords: ['wheat', 'gehu', 'gehoon', 'गेंहू', 'गेहूँ', 'कणक'],
+    keywords: ['wheat', 'gehu', 'gehoon', 'गेंहू', 'गेहूँ', 'गेहूं', 'गेहू', 'कणक'],
     title: 'Scientific Wheat Cultivation (Rabi Season)',
     summary: 'Sowing from Nov 1 to Nov 25. Varieties: HD 2967, PBW 550, Sharbati, DBW 187.',
     remedy: `• Seed Rate: 100 kg/hectare (line sowing) or 125 kg/hectare for late sowing.

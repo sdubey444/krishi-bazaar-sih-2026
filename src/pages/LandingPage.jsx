@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sprout,
   Store,
@@ -18,8 +18,14 @@ import {
 } from 'lucide-react';
 import { CROPS, CROP_CATEGORIES } from '../config/crops';
 import { store } from '../services/store';
+import { i18n } from '../services/i18nService';
 
 export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser, onRequireAuth }) {
+  const [currentLang, setCurrentLang] = useState(i18n.getLanguage());
+
+  useEffect(() => {
+    return i18n.subscribe(lang => setCurrentLang(lang));
+  }, []);
   const categories = [
     {
       name: CROP_CATEGORIES.GRAINS,
@@ -120,7 +126,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser
               className="px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Store className="w-4 h-4" />
-              Explore Marketplace
+              {i18n.t('exploreMarketplace')}
             </button>
 
             <button
@@ -128,7 +134,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser
               className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Layers className="w-4 h-4" />
-              Order Bulk Produce
+              {i18n.t('orderBulkProduce')}
             </button>
 
             <button
@@ -136,7 +142,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser
               className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Mic className="w-4 h-4 text-amber-300 animate-pulse" />
-              Voice Search / Ask AI
+              Krishi AI / कृषि AI
             </button>
 
             <button
@@ -371,7 +377,7 @@ export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition-colors flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Ask Krishi AI Assistant
+                Krishi AI से पूछें
               </button>
             </div>
           </div>

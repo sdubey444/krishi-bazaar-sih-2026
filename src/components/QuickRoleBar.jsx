@@ -68,13 +68,25 @@ export default function QuickRoleBar({ onRoleChange }) {
           </button>
 
           <button
+            onClick={() => handleSwitch('logistics_1')}
+            className={`px-2.5 py-1 rounded font-medium transition-all ${
+              currentUser?.role === 'logistics'
+                ? 'bg-indigo-500 text-white font-bold shadow'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+            title="Role 3: Logistics Partner"
+          >
+            🚚 Logistics Partner
+          </button>
+
+          <button
             onClick={() => handleSwitch('admin_1')}
             className={`px-2.5 py-1 rounded font-medium transition-all ${
               currentUser?.role === 'admin'
                 ? 'bg-amber-500 text-slate-950 font-bold shadow'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
             }`}
-            title="Role 3: State Administrator"
+            title="Role 4: State Administrator"
           >
             ⚡ Admin
           </button>
