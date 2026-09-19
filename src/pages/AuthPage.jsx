@@ -36,8 +36,11 @@ export default function AuthPage({
   const [name, setName] = useState('');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [location, setLocation] = useState('');
   const [organization, setOrganization] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleType, setVehicleType] = useState('Mini Truck (Tata 407)');
 
   // Feedback states
   const [errorMessage, setErrorMessage] = useState('');
@@ -60,8 +63,8 @@ export default function AuthPage({
     {
       id: 'farmer',
       name: 'Farmer / FPO',
-      tagline: 'Sell your agricultural products directly to buyers.',
-      details: 'List your harvest at your own asking price, receive orders from buyers, and receive guaranteed transparent payouts.',
+      tagline: 'Sell agricultural produce directly to buyers.',
+      details: 'Create farm product listings, accept buyer and bulk orders, check daily local Mandi prices, and schedule pickups.',
       icon: Sprout,
       color: 'emerald',
       bgActive: 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950',
@@ -160,6 +163,10 @@ export default function AuthPage({
         setErrorMessage('Please enter your full name.');
         return;
       }
+      if (password !== confirmPassword) {
+        setErrorMessage('Passwords do not match. Please re-enter your password.');
+        return;
+      }
     }
 
     if (!emailOrPhone.trim()) {
@@ -184,7 +191,9 @@ export default function AuthPage({
           location: location.trim() || 'Prayagraj',
           email: emailOrPhone.includes('@') ? emailOrPhone.trim() : `${role}_${Date.now()}@krishibazaar.in`,
           phone: !emailOrPhone.includes('@') ? emailOrPhone.trim() : '+91 98765 43210',
-          password
+          password,
+          vehicleNumber: vehicleNumber.trim() || (role === 'logistics' ? 'UP70 AB 1234' : undefined),
+          vehicleType: vehicleType || (role === 'logistics' ? 'Mini Truck (Tata 407)' : undefined)
         });
         setSuccessMessage(`Account created successfully! Welcome, ${user.name}.`);
       } else {
@@ -426,7 +435,7 @@ export default function AuthPage({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Create New {selectedRole === 'farmer' ? 'Farmer' : 'Buyer'} Account
+                  Create New {selectedRole === 'farmer' ? 'Farmer' : selectedRole === 'logistics' ? 'Logistics Partner' : 'Buyer'} Account
                 </button>
               </div>
             ) : (
@@ -471,6 +480,8 @@ export default function AuthPage({
                         placeholder={
                           selectedRole === 'farmer'
                             ? 'e.g. Ramesh Patel'
+                            : selectedRole === 'logistics'
+                            ? 'e.g. Rajesh Kumar (or Transport Owner Name)'
                             : 'e.g. Avadh Agro Mills'
                         }
                         className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-xs sm:text-sm"
@@ -483,6 +494,8 @@ export default function AuthPage({
                     <label className="font-bold text-slate-700 block">
                       {selectedRole === 'farmer'
                         ? 'FPO or Cooperative Name (Optional):'
+                        : selectedRole === 'logistics'
+                        ? 'Fleet / Logistics Enterprise Name (Optional):'
                         : 'Business or Household Name (Optional):'}
                     </label>
                     <div className="relative">
@@ -494,6 +507,8 @@ export default function AuthPage({
                         placeholder={
                           selectedRole === 'farmer'
                             ? 'e.g. Ganga Valley Kisan Co-op'
+                            : selectedRole === 'logistics'
+                            ? 'e.g. Express Krishi Transport'
                             : 'e.g. Avadh Foods Ltd'
                         }
                         className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-xs sm:text-sm"
@@ -505,6 +520,8 @@ export default function AuthPage({
                     <label className="font-bold text-slate-700 block">
                       {selectedRole === 'farmer'
                         ? 'Your Nearest Mandi / District:'
+                        : selectedRole === 'logistics'
+                        ? 'Base Transport City / Operational Hub:'
                         : 'Your Delivery City:'}
                     </label>
                     <div className="relative">
@@ -513,11 +530,52 @@ export default function AuthPage({
                         type="text"
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
-                        placeholder="e.g. Prayagraj, Kanpur, Lucknow"
+                        placeholder={
+                          selectedRole === 'logistics'
+                            ? 'e.g. Prayagraj, Varanasi, Kanpur'
+                            : 'e.g. Prayagraj, Kanpur, Lucknow'
+                        }
                         className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-xs sm:text-sm"
                       />
                     </div>
                   </div>
+
+                  {/* Logistics-specific vehicle registration fields */}
+                  {selectedRole === 'logistics' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-slate-700 block">
+                          Vehicle Number (Optional):
+                        </label>
+                        <div className="relative">
+                          <Truck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={vehicleNumber}
+                            onChange={(e) => setVehicleNumber(e.target.value)}
+                            placeholder="e.g. UP70 AB 1234"
+                            className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-xs sm:text-sm uppercase"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-slate-700 block">
+                          Vehicle Type:
+                        </label>
+                        <select
+                          value={vehicleType}
+                          onChange={(e) => setVehicleType(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-xs sm:text-sm bg-white"
+                        >
+                          <option value="Mini Truck (Tata 407)">Mini Truck (Tata 407) - 5T</option>
+                          <option value="Light Commercial Vehicle (Bolero Maxi)">LCV (Bolero Maxi) - 2.5T</option>
+                          <option value="Medium Commercial Truck (Eicher Pro)">Medium Truck (Eicher) - 10T</option>
+                          <option value="Heavy Multi-Axle Truck (Tata Signa)">Heavy Truck (Signa) - 15T</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -535,6 +593,8 @@ export default function AuthPage({
                     placeholder={
                       selectedRole === 'farmer'
                         ? 'e.g. ramesh@gangafpo.org or 9876543210'
+                        : selectedRole === 'logistics'
+                        ? 'e.g. rajesh.logistics@krishibazaar.in or 9876567890'
                         : selectedRole === 'buyer'
                         ? 'e.g. procurement@avadhagro.in or 9811122334'
                         : 'admin@krishibazaar.gov.in'
@@ -546,6 +606,8 @@ export default function AuthPage({
                 <p className="text-[11px] text-slate-400">
                   {selectedRole === 'farmer'
                     ? 'Farmers can enter either mobile number or email.'
+                    : selectedRole === 'logistics'
+                    ? 'Transporters can enter mobile number or registered email.'
                     : 'Used to verify and track your agricultural trade orders.'}
                 </p>
               </div>
@@ -570,6 +632,29 @@ export default function AuthPage({
                   />
                 </div>
               </div>
+
+              {/* Confirm Password Field (Only for Registration) */}
+              {isRegister && selectedRole !== 'admin' && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-700 block">
+                      Confirm Password: <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400">Must match password</span>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-xs sm:text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Primary Submit Button */}
               <button

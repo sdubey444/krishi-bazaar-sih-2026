@@ -20,12 +20,23 @@ import { CROPS, CROP_CATEGORIES } from '../config/crops';
 import { store } from '../services/store';
 import { i18n } from '../services/i18nService';
 
-export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser, onRequireAuth }) {
+export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser, onRequireAuth, onSelectRole }) {
   const [currentLang, setCurrentLang] = useState(i18n.getLanguage());
+  const [selectedRole, setSelectedRole] = useState('logistics');
 
   useEffect(() => {
     return i18n.subscribe(lang => setCurrentLang(lang));
   }, []);
+
+  const handleRoleContinue = (role) => {
+    if (onSelectRole) {
+      onSelectRole(role);
+    } else if (onRequireAuth) {
+      onRequireAuth({ initialRole: role, actionType: 'role_select' });
+    } else {
+      setCurrentView('auth');
+    }
+  };
   const categories = [
     {
       name: CROP_CATEGORIES.GRAINS,
@@ -197,153 +208,320 @@ export default function LandingPage({ setCurrentView, onOpenAiModal, currentUser
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Role 1: Farmer / FPO */}
-          <div className="bg-white rounded-3xl border-2 border-emerald-500/30 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-emerald-500">
+          <div
+            onClick={() => setSelectedRole('farmer')}
+            className={`bg-white rounded-3xl border-2 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group ${
+              selectedRole === 'farmer'
+                ? 'border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/20'
+                : 'border-emerald-500/30 hover:border-emerald-500'
+            }`}
+          >
             <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700 group-hover:scale-105 transition-transform">
-                <Sprout className="w-6 h-6" />
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700 group-hover:scale-105 transition-transform">
+                  <Sprout className="w-6 h-6" />
+                </div>
+                {selectedRole === 'farmer' && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Selected
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  For Growers & Cooperatives
+                  {i18n.t('roleFarmer') || 'Farmer / FPO'}
                 </span>
                 <h3 className="text-xl font-black text-slate-900 mt-2">Farmer / FPO</h3>
-                <p className="text-sm font-semibold text-emerald-800 mt-1">
+                <p className="text-xs font-semibold text-emerald-800 mt-1">
                   Sell your agricultural products directly to buyers.
                 </p>
               </div>
-              <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>List your harvest at your own asking price</span>
+              <ul className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>List harvest at your asking price</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span>Receive orders from genuine buyers</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Check local Mandi rates & demand trends</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Guaranteed transparent payouts with no hidden cuts</span>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Mandi benchmark price intelligence</span>
                 </li>
               </ul>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100">
+            <div className="pt-5 mt-5 border-t border-slate-100 space-y-2">
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoleContinue('farmer');
+                }}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span>Continue as Farmer</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   store.setCurrentUser('farmer_a');
                   setCurrentView('farmer-dashboard');
                 }}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] transition-colors"
+                title="Instant evaluation login"
               >
-                <span>Enter as Farmer / FPO</span>
-                <ArrowRight className="w-4 h-4" />
+                Instant Demo Entry →
               </button>
             </div>
           </div>
 
           {/* Role 2: Buyer / Consumer */}
-          <div className="bg-white rounded-3xl border-2 border-blue-500/30 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-blue-500">
+          <div
+            onClick={() => setSelectedRole('buyer')}
+            className={`bg-white rounded-3xl border-2 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group ${
+              selectedRole === 'buyer'
+                ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/20'
+                : 'border-blue-500/30 hover:border-blue-500'
+            }`}
+          >
             <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 group-hover:scale-105 transition-transform">
-                <ShoppingBag className="w-6 h-6" />
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 group-hover:scale-105 transition-transform">
+                  <ShoppingBag className="w-6 h-6" />
+                </div>
+                {selectedRole === 'buyer' && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-900 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-300">
+                    Selected
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-                  For Buyers & Consumers
+                  {i18n.t('roleBuyer') || 'Buyer / Consumer'}
                 </span>
                 <h3 className="text-xl font-black text-slate-900 mt-2">Buyer / Consumer</h3>
-                <p className="text-sm font-semibold text-blue-800 mt-1">
+                <p className="text-xs font-semibold text-blue-800 mt-1">
                   Find products, compare prices, and place orders.
                 </p>
               </div>
-              <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Purchase individual lots directly from farmers</span>
+              <ul className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Direct farm purchase without middlemen</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Fulfill large bulk orders across multiple farmers</span>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Bulk aggregated multi-farmer supply</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Transparent cost breakdown (produce + delivery)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Real-time delivery tracking to your door</span>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Live delivery tracking to your door</span>
                 </li>
               </ul>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100">
+            <div className="pt-5 mt-5 border-t border-slate-100 space-y-2">
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoleContinue('buyer');
+                }}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span>Continue as Buyer</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   store.setCurrentUser('buyer_1');
                   setCurrentView('buyer-dashboard');
                 }}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-[11px] transition-colors"
+                title="Instant evaluation login"
               >
-                <span>Enter as Buyer / Consumer</span>
-                <ArrowRight className="w-4 h-4" />
+                Instant Demo Entry →
               </button>
             </div>
           </div>
 
-          {/* Role 3: Admin */}
-          <div className="bg-white rounded-3xl border-2 border-amber-500/30 p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group hover:border-amber-500">
+          {/* Role 3: Logistics Partner */}
+          <div
+            onClick={() => setSelectedRole('logistics')}
+            className={`bg-white rounded-3xl border-2 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group ${
+              selectedRole === 'logistics'
+                ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/20'
+                : 'border-indigo-500/30 hover:border-indigo-500'
+            }`}
+          >
             <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 group-hover:scale-105 transition-transform">
-                <ShieldCheck className="w-6 h-6" />
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-700 group-hover:scale-105 transition-transform">
+                  <Truck className="w-6 h-6" />
+                </div>
+                {selectedRole === 'logistics' && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 bg-indigo-100 px-2 py-0.5 rounded-full border border-indigo-300">
+                    Selected
+                  </span>
+                )}
               </div>
               <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                  Platform Administration
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  {i18n.t('roleLogistics') || 'Logistics Partner'}
                 </span>
-                <h3 className="text-xl font-black text-slate-900 mt-2">Admin</h3>
-                <p className="text-sm font-semibold text-amber-800 mt-1">
-                  Manage and monitor the Krishi Bazaar platform.
+                <h3 className="text-xl font-black text-slate-900 mt-2">Logistics Partner</h3>
+                <p className="text-xs font-semibold text-indigo-800 mt-1">
+                  Transport agricultural produce from farms to buyers.
                 </p>
               </div>
-              <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Monitor platform trade volume and activity</span>
+              <ul className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>Accept assigned pickup orders</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Approve and verify delivery vehicles & partners</span>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>Live tracking & highway transit route</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Oversee all registered farmers, buyers, and listings</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Audit orders and ensure fair agricultural trade</span>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>Guaranteed 90% direct freight payout</span>
                 </li>
               </ul>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100">
+            <div className="pt-5 mt-5 border-t border-slate-100 space-y-2">
               <button
-                onClick={() => {
-                  store.setCurrentUser('admin_1');
-                  setCurrentView('admin-dashboard');
+                type="button"
+                id="continue-logistics-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoleContinue('logistics');
                 }}
-                className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5"
               >
-                <span>Enter Admin Console</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Continue as Logistics</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  store.setCurrentUser('logistics_1');
+                  setCurrentView('logistics-dashboard');
+                }}
+                className="w-full py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold text-[11px] transition-colors"
+                title="Instant evaluation login"
+              >
+                Instant Demo Entry →
               </button>
             </div>
           </div>
+
+          {/* Role 4: Admin */}
+          <div
+            onClick={() => setSelectedRole('admin')}
+            className={`bg-white rounded-3xl border-2 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group ${
+              selectedRole === 'admin'
+                ? 'border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/20'
+                : 'border-amber-500/30 hover:border-amber-500'
+            }`}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 group-hover:scale-105 transition-transform">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                {selectedRole === 'admin' && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                    Selected
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  {i18n.t('roleAdmin') || 'Admin'}
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2">Admin</h3>
+                <p className="text-xs font-semibold text-amber-800 mt-1">
+                  Manage and monitor the Krishi Bazaar platform.
+                </p>
+              </div>
+              <ul className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Monitor platform trade volume & audit</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Verify logistics partners & vehicles</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Manage marketplace listings & users</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="pt-5 mt-5 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoleContinue('admin');
+                }}
+                className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span>Continue as Admin</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  store.setCurrentUser('admin_1');
+                  setCurrentView('admin-dashboard');
+                }}
+                className="w-full py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] transition-colors"
+                title="Instant evaluation login"
+              >
+                Instant Demo Entry →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Role Continue Bar (Section 1 Flow: Select Role -> Continue -> Auth) */}
+        <div className="mt-6 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-700 font-black">
+              {selectedRole === 'farmer' ? '🌾' : selectedRole === 'buyer' ? '🛒' : selectedRole === 'logistics' ? '🚚' : '⚡'}
+            </div>
+            <div>
+              <span className="text-xs text-slate-500 block">Selected Role:</span>
+              <span className="font-black text-slate-900 text-sm capitalize">
+                {selectedRole === 'farmer' ? 'Farmer / FPO' : selectedRole === 'buyer' ? 'Buyer / Consumer' : selectedRole === 'logistics' ? 'Logistics Partner' : 'Platform Admin'}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="home-role-continue-btn"
+            onClick={() => handleRoleContinue(selectedRole)}
+            className="w-full sm:w-auto px-8 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2"
+          >
+            <span>Continue to {selectedRole === 'farmer' ? 'Farmer' : selectedRole === 'buyer' ? 'Buyer' : selectedRole === 'logistics' ? 'Logistics Partner' : 'Admin'} Authentication</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </section>
 

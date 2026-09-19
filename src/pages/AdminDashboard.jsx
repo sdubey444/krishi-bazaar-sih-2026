@@ -14,12 +14,19 @@ import {
   Activity,
   Sparkles,
   LogOut,
-  User
+  User,
+  Mic,
+  Bot
 } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import StatusBadge from '../components/StatusBadge';
 
-export default function AdminDashboard({ setCurrentView, setSelectedOrderId }) {
+export default function AdminDashboard({
+  setCurrentView,
+  setSelectedOrderId,
+  onOpenAiModal,
+  initialTab = 'overview'
+}) {
   const [currentUser, setCurrentUser] = useState(store.currentUser);
   const [users, setUsers] = useState(store.users);
   const [listings, setListings] = useState(store.listings);
@@ -74,6 +81,15 @@ export default function AdminDashboard({ setCurrentView, setSelectedOrderId }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenAiModal}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 active:scale-95 border border-white/20"
+              title="Open व्यवस्था सहायक (Admin Assistant)"
+            >
+              <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span>व्यवस्था सहायक (AI)</span>
+            </button>
+
             <button
               onClick={() => {
                 store.logout();

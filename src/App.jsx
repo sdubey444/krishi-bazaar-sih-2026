@@ -10,6 +10,7 @@ import LogisticsRegisterModal from './components/LogisticsRegisterModal';
 import AuthPromptModal from './components/AuthPromptModal';
 import MarketStrip from './components/MarketStrip';
 import LocationSelectorModal from './components/LocationSelectorModal';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Mic, Sparkles } from 'lucide-react';
 
 // Pages
@@ -24,6 +25,7 @@ import BuyerDashboard from './pages/BuyerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import LogisticsPartnerDashboard from './pages/LogisticsPartnerDashboard';
 import AuthPage from './pages/AuthPage';
+import KrishiAiPage from './pages/KrishiAiPage';
 
 export default function App() {
   const [currentView, setCurrentViewState] = useState(() => {
@@ -33,6 +35,7 @@ export default function App() {
     }
     return 'landing';
   });
+  const [currentViewTab, setCurrentViewTab] = useState(null);
   const [currentUser, setCurrentUser] = useState(store.currentUser);
   const [selectedOrderId, setSelectedOrderId] = useState('ORD-2026-8812');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -167,20 +170,22 @@ export default function App() {
   };
 
   const handleVoiceSearchClick = () => {
-    if (!currentUser) {
-      triggerAuthRequired({
-        title: 'Please Log In to Use Krishi AI',
-        message: 'Please create an account or log in to continue with Krishi AI.',
-        actionType: 'voice',
-        returnAction: 'voice'
-      });
-    } else {
-      setIsAiModalOpen(true);
-    }
+    setIsAiModalOpen(true);
   };
 
   const renderActiveView = () => {
     switch (currentView) {
+      case 'krishi-ai':
+      case 'ai':
+        return (
+          <KrishiAiPage
+            setCurrentView={setCurrentView}
+            currentUser={currentUser}
+            onNavigate={handleAiNavigate}
+            defaultCropId={defaultAiCropId}
+          />
+        );
+
       case 'landing':
         return (
           <LandingPage
@@ -230,15 +235,6 @@ export default function App() {
           <MarketIntel
             setCurrentView={setCurrentView}
             onOpenAiModal={(cropId) => {
-              if (!currentUser) {
-                triggerAuthRequired({
-                  title: 'Please Log In to Use Krishi AI',
-                  message: 'Please create an account or log in to continue with Krishi AI.',
-                  actionType: 'voice',
-                  returnAction: 'voice'
-                });
-                return;
-              }
               if (cropId && typeof cropId === 'string') {
                 setDefaultAiCropId(cropId);
               }
@@ -263,7 +259,7 @@ export default function App() {
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
             onOpenAiModal={handleVoiceSearchClick}
-            initialTab={currentView === 'my-orders' ? 'orders' : 'dashboard'}
+            initialTab={currentViewTab || (currentView === 'my-orders' ? 'orders' : 'overview')}
           />
         );
 
@@ -272,6 +268,8 @@ export default function App() {
           <AdminDashboard
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
+            onOpenAiModal={handleVoiceSearchClick}
+            initialTab={currentViewTab || 'overview'}
           />
         );
 
@@ -281,6 +279,8 @@ export default function App() {
           <LogisticsPartnerDashboard
             setCurrentView={setCurrentView}
             setSelectedOrderId={setSelectedOrderId}
+            onOpenAiModal={handleVoiceSearchClick}
+            initialTab={currentViewTab || 'overview'}
           />
         );
 
@@ -302,6 +302,11 @@ export default function App() {
             currentUser={currentUser}
             onOpenAiModal={handleVoiceSearchClick}
             onRequireAuth={triggerAuthRequired}
+            onSelectRole={(role) => {
+              setAuthInitialRole(role);
+              setAuthInitialMode('login');
+              setCurrentView('auth');
+            }}
           />
         );
     }
@@ -314,84 +319,102 @@ export default function App() {
     if (params?.orderId) {
       setSelectedOrderId(params.orderId);
     }
+    if (params?.tab) {
+      setCurrentViewTab(params.tab);
+    }
     setCurrentView(targetView);
+    if (params?.scrollTo && typeof window !== 'undefined') {
+      setTimeout(() => {
+        try {
+          const el = document.querySelector(params.scrollTo);
+          el?.scrollIntoView({ behavior: 'smooth' });
+        } catch (e) {
+          // ignore invalid selector
+        }
+      }, 300);
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans relative">
-      {/* 1-Click Judge Role Switcher Banner */}
-      <QuickRoleBar onRoleChange={handleRoleChanged} />
+    <ErrorBoundary onReset={() => { setCurrentView('landing'); setIsAiModalOpen(false); }}>
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans relative">
+        {/* 1-Click Judge Role Switcher Banner */}
+        <QuickRoleBar onRoleChange={handleRoleChanged} />
 
-      {/* Main Responsive Header */}
-      <Navbar
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        onOpenAiModal={handleVoiceSearchClick}
-        onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
-        onOpenLocationSelector={() => setIsLocationModalOpen(true)}
-        onRequireAuth={triggerAuthRequired}
-      />
+        {/* Main Responsive Header */}
+        <Navbar
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          onOpenAiModal={handleVoiceSearchClick}
+          onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
+          onOpenLocationSelector={() => setIsLocationModalOpen(true)}
+          onRequireAuth={triggerAuthRequired}
+        />
 
-      {/* Compact Market Strip with Truthful Data Status */}
-      <MarketStrip
-        onOpenMarketIntel={(cropId) => {
-          if (cropId) setDefaultAiCropId(cropId);
-          setCurrentView('market-intel');
-        }}
-      />
+        {/* Compact Market Strip with Truthful Data Status */}
+        <MarketStrip
+          onOpenMarketIntel={(cropId) => {
+            if (cropId) setDefaultAiCropId(cropId);
+            setCurrentView('market-intel');
+          }}
+        />
 
-      {/* Primary Content Router */}
-      <main className="flex-1">
-        {renderActiveView()}
-      </main>
+        {/* Primary Content Router */}
+        <main className="flex-1">
+          {renderActiveView()}
+        </main>
 
-      {/* Platform Footer */}
-      <Footer setCurrentView={setCurrentView} />
+        {/* Platform Footer */}
+        <Footer setCurrentView={setCurrentView} />
 
-      {/* Floating Persistent Krishi AI Assistant Button */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <button
-          onClick={handleVoiceSearchClick}
-          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
-          title="Open Krishi AI / कृषि AI से बात करें"
-        >
-          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-            <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-          </div>
-          <span>Krishi AI / कृषि AI</span>
-        </button>
+        {/* Floating Persistent Krishi AI Assistant Button */}
+        <div className="fixed bottom-6 right-6 z-40">
+          <button
+            onClick={handleVoiceSearchClick}
+            className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-brand-600 to-emerald-700 hover:from-emerald-500 hover:to-brand-500 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-700/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all border-2 border-white/30 group"
+            title="Open Krishi AI / कृषि AI से बात करें"
+          >
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+            </div>
+            <span>Krishi AI / कृषि AI</span>
+          </button>
+        </div>
+
+        {/* Global Context-Aware Krishi AI Modal */}
+        <KrishiAiModal
+          isOpen={isAiModalOpen}
+          onClose={() => setIsAiModalOpen(false)}
+          defaultCropId={defaultAiCropId}
+          onNavigate={handleAiNavigate}
+          currentUser={currentUser}
+          currentRole={currentUser?.role}
+          currentView={currentView}
+        />
+
+        {/* Logistics Partner Registration Modal */}
+        <LogisticsRegisterModal
+          isOpen={isLogisticsRegisterOpen}
+          onClose={() => setIsLogisticsRegisterOpen(false)}
+        />
+
+        {/* Location Selector Modal */}
+        <LocationSelectorModal
+          isOpen={isLocationModalOpen}
+          onClose={() => setIsLocationModalOpen(false)}
+        />
+
+        {/* Account-First Authentication Interception Modal */}
+        <AuthPromptModal
+          isOpen={Boolean(authPrompt?.isOpen)}
+          onClose={() => setAuthPrompt(null)}
+          title={authPrompt?.title}
+          message={authPrompt?.message}
+          actionType={authPrompt?.actionType}
+          onCreateAccount={handlePromptCreateAccount}
+          onLogin={handlePromptLogin}
+        />
       </div>
-
-      {/* Global Krishi AI Modal */}
-      <KrishiAiModal
-        isOpen={isAiModalOpen}
-        onClose={() => setIsAiModalOpen(false)}
-        defaultCropId={defaultAiCropId}
-        onNavigate={handleAiNavigate}
-      />
-
-      {/* Logistics Partner Registration Modal */}
-      <LogisticsRegisterModal
-        isOpen={isLogisticsRegisterOpen}
-        onClose={() => setIsLogisticsRegisterOpen(false)}
-      />
-
-      {/* Location Selector Modal */}
-      <LocationSelectorModal
-        isOpen={isLocationModalOpen}
-        onClose={() => setIsLocationModalOpen(false)}
-      />
-
-      {/* Account-First Authentication Interception Modal */}
-      <AuthPromptModal
-        isOpen={Boolean(authPrompt?.isOpen)}
-        onClose={() => setAuthPrompt(null)}
-        title={authPrompt?.title}
-        message={authPrompt?.message}
-        actionType={authPrompt?.actionType}
-        onCreateAccount={handlePromptCreateAccount}
-        onLogin={handlePromptLogin}
-      />
-    </div>
+    </ErrorBoundary>
   );
 }

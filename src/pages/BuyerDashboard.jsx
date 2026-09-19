@@ -14,7 +14,9 @@ import {
   PackageCheck,
   PlusCircle,
   AlertCircle,
-  LogOut
+  LogOut,
+  Mic,
+  Bot
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import MetricCard from '../components/MetricCard';
@@ -85,6 +87,15 @@ export default function BuyerDashboard({ setCurrentView, setSelectedOrderId, onO
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={onOpenAiModal}
+              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-brand-600 hover:from-emerald-500 hover:to-brand-500 text-white text-xs font-black shadow-md transition-all flex items-center gap-1.5 active:scale-95 border border-white/20"
+              title="Open खरीदार सहायक (Buyer Assistant)"
+            >
+              <Mic className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span>खरीदार सहायक (AI)</span>
+            </button>
+
             <button
               onClick={() => {
                 store.logout();
