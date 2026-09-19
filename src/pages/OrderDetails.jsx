@@ -224,6 +224,13 @@ export default function OrderDetails({ orderId, setCurrentView, setSelectedOrder
               );
             })}
           </div>
+
+          <div className="pt-2 flex flex-wrap items-center justify-between text-[11px] text-slate-500 border-t border-slate-100 gap-2">
+            <span className="font-semibold text-slate-700">ℹ️ Interactive Prototype Milestone Tracking (Click any step to simulate workflow)</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] border border-emerald-300">
+              Simulated Tracking Workflow
+            </span>
+          </div>
         </div>
       </div>
 
@@ -286,6 +293,20 @@ export default function OrderDetails({ orderId, setCurrentView, setSelectedOrder
               <span>
                 Farmers receive 100% of their produce value directly with zero middleman deductions.
               </span>
+            </div>
+
+            <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200/80 text-[11px] text-purple-950 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold uppercase tracking-wider text-purple-900">
+                  Prototype Digital Escrow Status
+                </span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-200 text-purple-900">
+                  Escrow Hold (Demo)
+                </span>
+              </div>
+              <p className="leading-relaxed text-purple-900">
+                Payment verified under prototype escrow protection. Farmer payout of {formatCurrency(produceAmount)} is guaranteed upon physical delivery confirmation. Commercial production integrates RazorpayX / NPCI UPI AutoPay.
+              </p>
             </div>
           </div>
 
@@ -377,7 +398,7 @@ export default function OrderDetails({ orderId, setCurrentView, setSelectedOrder
                     <div className="text-slate-500">{alloc.fpoName || 'Local FPO'}</div>
                     <div className="flex items-center gap-1.5 text-slate-600">
                       <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{alloc.location}, UP</span>
+                      <span>{alloc.location}</span>
                       <span className="mx-1 text-slate-300">•</span>
                       <span className="font-semibold text-brand-700">{alloc.qualityGrade || 'Grade A'}</span>
                     </div>

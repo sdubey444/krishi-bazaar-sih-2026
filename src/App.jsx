@@ -8,6 +8,8 @@ import Footer from './components/Footer';
 import KrishiAiModal from './components/KrishiAiModal';
 import LogisticsRegisterModal from './components/LogisticsRegisterModal';
 import AuthPromptModal from './components/AuthPromptModal';
+import MarketStrip from './components/MarketStrip';
+import LocationSelectorModal from './components/LocationSelectorModal';
 import { Mic, Sparkles } from 'lucide-react';
 
 // Pages
@@ -34,6 +36,7 @@ export default function App() {
   const [selectedOrderId, setSelectedOrderId] = useState('ORD-2026-8812');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isLogisticsRegisterOpen, setIsLogisticsRegisterOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [defaultAiCropId, setDefaultAiCropId] = useState('wheat');
 
   // Account-First Auth Interception State
@@ -294,6 +297,9 @@ export default function App() {
     if (params?.cropId) {
       setDefaultAiCropId(params.cropId);
     }
+    if (params?.orderId) {
+      setSelectedOrderId(params.orderId);
+    }
     setCurrentView(targetView);
   };
 
@@ -308,7 +314,16 @@ export default function App() {
         setCurrentView={setCurrentView}
         onOpenAiModal={handleVoiceSearchClick}
         onOpenLogisticsRegister={() => setIsLogisticsRegisterOpen(true)}
+        onOpenLocationSelector={() => setIsLocationModalOpen(true)}
         onRequireAuth={triggerAuthRequired}
+      />
+
+      {/* Compact Market Strip with Truthful Data Status */}
+      <MarketStrip
+        onOpenMarketIntel={(cropId) => {
+          if (cropId) setDefaultAiCropId(cropId);
+          setCurrentView('market-intel');
+        }}
       />
 
       {/* Primary Content Router */}
@@ -345,6 +360,12 @@ export default function App() {
       <LogisticsRegisterModal
         isOpen={isLogisticsRegisterOpen}
         onClose={() => setIsLogisticsRegisterOpen(false)}
+      />
+
+      {/* Location Selector Modal */}
+      <LocationSelectorModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
       />
 
       {/* Account-First Authentication Interception Modal */}

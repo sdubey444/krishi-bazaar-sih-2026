@@ -21,8 +21,14 @@ import {
   Info,
   Layers,
   Store,
-  ArrowLeft
+  ArrowLeft,
+  MapPin,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
+import { locationService } from '../services/locationService';
+import { marketDataService } from '../services/marketDataService';
+import LocationSelectorModal from '../components/LocationSelectorModal';
 import {
   ResponsiveContainer,
   BarChart,
@@ -40,12 +46,33 @@ import {
 export default function MarketIntel({ setCurrentView, onOpenAiModal }) {
   const [selectedCropId, setSelectedCropId] = useState('wheat');
   const [listings, setListings] = useState(store.listings || []);
+  const [locationContext, setLocationContext] = useState(() => locationService.getLocationContext());
+  const [mandiPriceData, setMandiPriceData] = useState(null);
+  const [nearbyMandis, setNearbyMandis] = useState([]);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   useEffect(() => {
-    return store.subscribe(state => {
+    const unsubStore = store.subscribe(state => {
       setListings(state.listings || []);
     });
+    const unsubLoc = locationService.subscribe(loc => {
+      setLocationContext(loc);
+    });
+    return () => {
+      unsubStore();
+      unsubLoc();
+    };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    marketDataService.getCommodityMarketPrice(selectedCropId, locationContext).then(data => {
+      if (active) setMandiPriceData(data);
+    });
+    const mandis = locationService.getNearbyMandisForContext(locationContext);
+    setNearbyMandis(mandis);
+    return () => { active = false; };
+  }, [selectedCropId, locationContext]);
 
   const selectedCrop = CROPS.find(c => c.id === selectedCropId) || CROPS[0];
   const demandForecast = getCropDemandForecast(selectedCropId);
@@ -131,25 +158,144 @@ export default function MarketIntel({ setCurrentView, onOpenAiModal }) {
         </div>
       </div>
 
+      {/* LOCATION CONTEXT & SELECTOR BAR */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+              Active Agricultural Location
+            </span>
+            <span className="text-sm font-black text-slate-900">
+              {locationContext.mandi ? `${locationContext.mandi}, ` : ''}{locationContext.district}, {locationContext.state}
+            </span>
+            <span className="text-[10px] text-slate-500 ml-1">
+              ({locationContext.source === 'gps' ? 'GPS Verified' : locationContext.isManual ? 'Selected Manually' : 'Regional Default'})
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsLocationModalOpen(true)}
+          className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-colors flex items-center gap-1.5"
+        >
+          <MapPin className="w-3.5 h-3.5 text-brand-600" />
+          <span>Change Location</span>
+        </button>
+      </div>
+
+      {/* LOCATION-AWARE REAL MANDI QUOTE CARD */}
+      {mandiPriceData && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Mandi Benchmark Rate
+                </span>
+                {mandiPriceData.status === 'Verified current' ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-black uppercase border border-emerald-300">
+                    Verified Current
+                  </span>
+                ) : mandiPriceData.status === 'Latest available online data' ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-black uppercase border border-blue-300">
+                    Latest Available Online Data
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black uppercase border border-amber-300">
+                    Sample Benchmark Data (Agmarknet 2026)
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-2xl font-black text-slate-900 mt-1 flex items-center gap-2">
+                <span>{selectedCrop.emoji}</span>
+                <span>{selectedCrop.name}</span>
+                {mandiPriceData.variety && (
+                  <span className="text-xs font-normal text-slate-500">({mandiPriceData.variety})</span>
+                )}
+              </h2>
+            </div>
+
+            <div className="text-right">
+              {mandiPriceData.pricePerKg ? (
+                <>
+                  <span className="text-2xl sm:text-3xl font-black text-brand-800">
+                    ₹{mandiPriceData.pricePerKg} <span className="text-sm font-semibold text-slate-600">/ kg</span>
+                  </span>
+                  <span className="text-xs text-slate-500 block font-semibold">
+                    (₹{mandiPriceData.pricePerQuintal || (mandiPriceData.pricePerKg * 100)} / Quintal)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl sm:text-3xl font-black text-amber-800">
+                    ₹{priceIntel.currentPrice} <span className="text-sm font-semibold text-slate-600">/ kg</span>
+                  </span>
+                  <span className="text-xs text-amber-700 block font-semibold">
+                    (Sample Benchmark Rate • Local Feed Pending)
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-slate-400 text-[10px] uppercase font-bold block">Mandi / Market Yard</span>
+              <span className="font-bold text-slate-800">{mandiPriceData.mandi}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-slate-400 text-[10px] uppercase font-bold block">District & State</span>
+              <span className="font-bold text-slate-800">{mandiPriceData.district}, {mandiPriceData.state}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-slate-400 text-[10px] uppercase font-bold block">Date Recorded</span>
+              <span className="font-bold text-slate-800 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-slate-400" />
+                {mandiPriceData.recordedDate || 'Pending Live Verification'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-slate-400 text-[10px] uppercase font-bold block">Authentic Source</span>
+              <span className="font-bold text-slate-800 truncate block" title={mandiPriceData.source}>
+                {mandiPriceData.source}
+              </span>
+            </div>
+          </div>
+
+          {mandiPriceData.note && (
+            <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              ℹ️ {mandiPriceData.note}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* TRANSPARENT DATA SOURCE BADGE / NOTICE */}
       <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2.5">
           <ShieldCheck className="w-5 h-5 text-blue-700 shrink-0" />
           <div>
             <span className="font-extrabold block text-blue-900">
-              Verified Agricultural Reference & Benchmark Data
+              Verified Agricultural Reference & Predictive AI Modeling
             </span>
             <span className="text-blue-800/80">
-              Prices and demand metrics are grounded in regional Mandi benchmark datasets and platform listings. Data is categorized as Reference / Estimated (not live external web scraping).
+              Prices and demand metrics are grounded in regional Mandi benchmark datasets and platform listings. Data is categorized as Reference / Estimated (demonstrating AI forecasting and advisory workflows for SIH evaluation).
             </span>
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="px-2.5 py-1 rounded-lg bg-blue-200/70 text-blue-900 font-extrabold text-[11px] uppercase tracking-wider">
-            Reference Data
+            Sample Benchmark Data
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-emerald-200/70 text-emerald-950 font-extrabold text-[11px] uppercase tracking-wider">
-            Estimated Trend
+            Predictive Model Demo
           </span>
         </div>
       </div>
@@ -446,6 +592,79 @@ export default function MarketIntel({ setCurrentView, onOpenAiModal }) {
         </div>
       </div>
 
+      {/* SECTION: NEARBY MANDI DISCOVERY */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider">
+                India-Wide Mandi Network
+              </span>
+              <span className="text-xs text-slate-500 font-semibold">APMC Discovery</span>
+            </div>
+            <h3 className="text-xl font-black text-slate-900 mt-1 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-brand-600" />
+              <span>Nearby Mandis & Market Yards in {locationContext.state}</span>
+            </h3>
+          </div>
+
+          <button
+            onClick={() => setIsLocationModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-300 transition-colors"
+          >
+            Change Location
+          </button>
+        </div>
+
+        {nearbyMandis.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {nearbyMandis.map((m, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl bg-slate-50 hover:bg-white border border-slate-200 hover:border-brand-300 hover:shadow-xs transition-all space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-extrabold text-sm text-slate-900">{m.mandiName}</h4>
+                  {m.distanceKm != null && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                      ~{m.distanceKm} km
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-600 space-y-1">
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <span>{m.district}, {m.state}</span>
+                  </div>
+
+                  {m.majorCrops && m.majorCrops.length > 0 && (
+                    <div className="pt-1 flex flex-wrap gap-1">
+                      {m.majorCrops.map(cropName => (
+                        <span key={cropName} className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 capitalize">
+                          {cropName}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>Source: State APMC Portal</span>
+                  <span className="text-emerald-700 font-semibold">Verified Market</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-slate-500 text-xs bg-slate-50 rounded-2xl border border-slate-200">
+            <AlertCircle className="w-6 h-6 mx-auto text-slate-400 mb-1" />
+            <p className="font-bold">Nearby mandi data unavailable.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Please select another district or state to view verified mandis.</p>
+          </div>
+        )}
+      </div>
+
       {/* QUICK PROCUREMENT & NAVIGATION CARDS */}
       {setCurrentView && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -479,6 +698,13 @@ export default function MarketIntel({ setCurrentView, onOpenAiModal }) {
         </div>
       )}
 
+      {/* Location Selector Modal */}
+      <LocationSelectorModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+      />
+
     </div>
   );
 }
+

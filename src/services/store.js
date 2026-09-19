@@ -191,6 +191,13 @@ class Store {
     this.save();
   }
 
+  deleteListing(id) {
+    const prevCount = this.listings.length;
+    this.listings = this.listings.filter(l => l.id !== id);
+    this.save();
+    return this.listings.length < prevCount;
+  }
+
   addBulkRequirement(req) {
     const newReq = {
       ...req,

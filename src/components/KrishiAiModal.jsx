@@ -12,10 +12,14 @@ import {
   CheckCircle2,
   TrendingUp,
   User,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  MapPin
 } from 'lucide-react';
 import { askKrishiAi } from '../services/geminiService';
 import { processNaturalQuery } from '../services/nluService';
+import { locationService } from '../services/locationService';
+import { i18n } from '../services/i18nService';
 
 export default function KrishiAiModal({
   isOpen,
@@ -28,19 +32,21 @@ export default function KrishiAiModal({
   const [messages, setMessages] = useState([]);
   const [voiceState, setVoiceState] = useState('idle'); // 'idle' | 'listening' | 'processing'
   const [speechSupported, setSpeechSupported] = useState(true);
-  const [speechLang, setSpeechLang] = useState('hi-IN'); // 'hi-IN' or 'en-IN'
+  const [currentLocation, setCurrentLocation] = useState(() => locationService.getLocationContext());
   const [statusNotice, setStatusNotice] = useState('');
+  const [pendingConfirmationAction, setPendingConfirmationAction] = useState(null);
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Check browser SpeechRecognition support on mount
   useEffect(() => {
+    const unsubLoc = locationService.subscribe(loc => setCurrentLocation(loc));
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechSupported(false);
     }
+    return () => unsubLoc();
   }, []);
 
   // Auto-scroll chat to bottom when messages or processing state changes
@@ -77,20 +83,19 @@ export default function KrishiAiModal({
 
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-      recognition.lang = speechLang;
+      recognition.lang = i18n.getSpeechRecognitionLang();
       recognition.continuous = false;
       recognition.interimResults = false;
 
       recognition.onstart = () => {
         setVoiceState('listening');
-        setStatusNotice('');
+        setStatusNotice(`Listening (${i18n.getLanguageMeta().name})... Speak your question clearly into the microphone.`);
       };
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setVoiceState('idle');
         if (transcript && transcript.trim()) {
-          // Execute processing directly for the captured speech
           handleExecuteQuery(transcript.trim(), true);
         }
       };
@@ -99,11 +104,11 @@ export default function KrishiAiModal({
         console.warn('Speech recognition error:', event.error);
         setVoiceState('idle');
         if (event.error === 'not-allowed') {
-          setStatusNotice('Microphone access was denied. Please allow microphone permission or type your question below.');
+          setStatusNotice('Microphone access was denied. Please grant microphone permission in browser settings, or type below.');
         } else if (event.error === 'no-speech') {
           setStatusNotice('No speech was detected. Please tap the microphone and speak again, or type below.');
         } else {
-          setStatusNotice('Speech capture was interrupted. You can type your question below.');
+          setStatusNotice(`Speech capture error (${event.error}). You can type your question below.`);
         }
         inputRef.current?.focus();
       };
@@ -157,16 +162,21 @@ export default function KrishiAiModal({
     setIsProcessing(true);
 
     try {
-      // B. Process Natural Language Understanding (NLU) against agricultural records
-      const nluResult = processNaturalQuery(cleanQuery, defaultCropId);
+      // B. Process Natural Language Understanding (NLU) with active Location Context
+      const nluResult = processNaturalQuery(cleanQuery, defaultCropId, currentLocation);
 
-      // C. Supplementary AI context from Gemini / grounded local engine if relevant
+      // C. Supplementary AI context from Gemini / grounded agronomy knowledge base
       let aiExplanation = null;
+      let aiSource = null;
       try {
-        if (cleanQuery.length > 5 && nluResult.intentType !== 'buy') {
-          const aiRes = await askKrishiAi(cleanQuery, { cropId: nluResult.cropId || defaultCropId });
+        if (cleanQuery.length > 3 && nluResult.intentType !== 'buy') {
+          const aiRes = await askKrishiAi(cleanQuery, {
+            cropId: nluResult.cropId || defaultCropId,
+            location: currentLocation
+          });
           if (aiRes && aiRes.text) {
             aiExplanation = aiRes.text;
+            aiSource = aiRes.source;
           }
         }
       } catch (geminiErr) {
@@ -183,18 +193,24 @@ export default function KrishiAiModal({
         intentType: nluResult.intentType,
         crop: nluResult.crop,
         action: nluResult.action,
+        requiresConfirmation: nluResult.requiresConfirmation,
         aiExplanation,
+        aiSource,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // If user voice query was a safe direct navigation command, offer immediate confirmation
+      if (isVoice && nluResult.action && !nluResult.requiresConfirmation) {
+        // Voice user can tap or confirm
+      }
     } catch (err) {
       console.error('Error processing query:', err);
-      // Friendly fallback message
       const errorMessage = {
         id: `err_${Date.now()}`,
         sender: 'assistant',
-        text: `I had trouble connecting to the live analytics service. However, based on platform benchmark records:\n• Wheat Reference Price: ₹28.00/kg\n• Mustard Reference Price: ₹58.00/kg\n• Rice Reference Price: ₹32.00/kg\n\nAll reference rates are based on regional mandi market records.`,
+        text: `I had trouble connecting to the live analytics service. However, based on platform benchmark records:\n• Wheat Reference Price: ₹28.00/kg\n• Mustard Reference Price: ₹58.00/kg\n• Rice Reference Price: ₹42.00/kg\n\nAll reference rates are based on regional mandi market records.`,
         understoodSummary: 'Platform Reference Data',
         intent: 'Reference Lookup',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -215,10 +231,23 @@ export default function KrishiAiModal({
     handleExecuteQuery(inputText, false);
   };
 
-  // 4. ACTION BUTTON NAVIGATION (Navigates when explicitly clicked)
-  const handleActionClick = (action) => {
+  // 4. ACTION BUTTON NAVIGATION WITH SAFETY GATE
+  const handleActionClick = (action, requiresConfirmation = false) => {
+    if (requiresConfirmation || action?.isHighRisk) {
+      setPendingConfirmationAction(action);
+      return;
+    }
+
     if (onNavigate && action?.targetView) {
       onNavigate(action.targetView, action.params);
+      onClose();
+    }
+  };
+
+  const handleConfirmHighRiskAction = () => {
+    if (pendingConfirmationAction && onNavigate) {
+      onNavigate(pendingConfirmationAction.targetView, pendingConfirmationAction.params);
+      setPendingConfirmationAction(null);
       onClose();
     }
   };
@@ -236,137 +265,139 @@ export default function KrishiAiModal({
     { label: 'गेहूँ का प्राइस क्या है?', query: 'गेहूँ का प्राइस क्या है?', emoji: '💰' },
     { label: 'gehu ka rate kya hai?', query: 'gehu ka rate kya hai?', emoji: '📊' },
     { label: 'mere area mein wheat ka price batao', query: 'mere area mein wheat ka price batao', emoji: '📍' },
-    { label: 'mujhe 100 quintal wheat chahiye', query: 'mujhe 100 quintal wheat chahiye', emoji: '🛒' },
-    { label: 'मेरे पास 5000 किलो गेहूं है, buyer चाहिए', query: 'मेरे पास 5000 किलो गेहूं है, मुझे buyer चाहिए', emoji: '🤝' },
-    { label: 'ट्रक बुकिंग कैसे करें', query: 'ट्रक बुकिंग कैसे करें', emoji: '🚚' },
-    { label: 'Which crop has high demand?', query: 'Which crop has high demand?', emoji: '📈' }
+    { label: 'Prayagraj mein pyaz ka kya bhaav hai?', query: 'Prayagraj mein pyaz ka kya bhaav hai?', emoji: '🧅' },
+    { label: 'mandi khol ke do', query: 'mandi khol ke do', emoji: '🏪' },
+    { label: 'mera order track karo', query: 'mera order track karo', emoji: '🚚' },
+    { label: 'mujhe 50 kilo aloo chahiye', query: 'mujhe 50 kilo aloo chahiye', emoji: '🥔' },
+    { label: 'agle season mein kya ugana chahiye?', query: 'agle season mein kya ugana chahiye?', emoji: '🌱' },
+    { label: 'patti peeli pad rahi hai', query: 'patti peeli pad rahi hai kya kare', emoji: '🍂' },
+    { label: 'ट्रक बुकिंग कैसे करें', query: 'ट्रक बुकिंग कैसे करें', emoji: '🚛' }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col h-[88vh] max-h-[760px] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-700 via-brand-800 to-emerald-900 text-white px-5 py-4 flex items-center justify-between shrink-0 shadow-sm">
+        <div className="bg-gradient-to-r from-brand-700 via-brand-800 to-emerald-900 text-white px-5 py-4 flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center shadow-inner">
               <Bot className="w-5 h-5 text-amber-300" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base tracking-tight">Krishi AI Assistant</h3>
+                <h3 className="font-extrabold text-base tracking-tight">Krishi Sahayak AI</h3>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
                   Voice + Chat
                 </span>
               </div>
-              <p className="text-xs text-emerald-100/90 mt-0.5">
-                Ask in Hindi, Hinglish, or English • Reference Market Intelligence
-              </p>
+              <div className="flex items-center gap-2 text-[11px] text-emerald-200/90 mt-0.5">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-amber-300" />
+                  {currentLocation.district || currentLocation.state} ({currentLocation.state})
+                </span>
+                <span>•</span>
+                <span>Language: {i18n.getLanguageMeta().name}</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {messages.length > 0 && (
               <button
                 onClick={handleClearChat}
-                className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/15 transition-colors"
+                className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-colors text-xs flex items-center gap-1"
                 title="Clear conversation"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset</span>
               </button>
             )}
+
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/15 transition-colors"
-              title="Close"
+              className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-colors"
+              title="Close assistant"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Scrollable Conversation Stream */}
-        <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 bg-slate-50/50">
+        {/* High Risk Confirmation Modal Alert */}
+        {pendingConfirmationAction && (
+          <div className="bg-amber-50 border-b border-amber-200 p-4 shrink-0 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900 block">
+                Explicit Confirmation Required
+              </span>
+              <p className="text-xs text-amber-800">
+                You requested a high-risk operation: "{pendingConfirmationAction.params?.actionQuery || 'Irreversible action'}". Are you sure you want to proceed?
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={() => setPendingConfirmationAction(null)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmHighRiskAction}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-2xs"
+                >
+                  Confirm & Execute
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status Notice Banner */}
+        {statusNotice && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs font-semibold text-amber-900 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{statusNotice}</span>
+            </div>
+            <button onClick={() => setStatusNotice('')} className="text-amber-700 hover:text-amber-900">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Chat Message Scroll Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-50/50">
           
-          {/* Welcome / Empty State */}
+          {/* Welcome Card if no messages */}
           {messages.length === 0 && (
-            <div className="space-y-4">
-              {/* Tap to Ask Hero Card */}
-              <div className="p-5 rounded-2xl bg-gradient-to-b from-brand-50/80 to-white border border-brand-200/80 text-center space-y-3 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-                  <span className="flex items-center gap-1.5">
-                    <Volume2 className="w-4 h-4 text-brand-600" />
-                    Speech Recognition
-                  </span>
-                  <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-slate-200 text-[11px]">
-                    <button
-                      onClick={() => setSpeechLang('hi-IN')}
-                      className={`px-2 py-0.5 rounded-full font-bold transition-all ${
-                        speechLang === 'hi-IN' ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      हिन्दी / Hinglish
-                    </button>
-                    <button
-                      onClick={() => setSpeechLang('en-IN')}
-                      className={`px-2 py-0.5 rounded-full font-bold transition-all ${
-                        speechLang === 'en-IN' ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      English
-                    </button>
+            <div className="space-y-4 py-2">
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">Namaste! I am Krishi Sahayak</h4>
+                    <p className="text-xs text-slate-500">Your bilingual agricultural advisor and website controller</p>
                   </div>
                 </div>
-
-                {/* Main Tap to Ask Button */}
-                <div className="py-2 flex flex-col items-center">
-                  {voiceState === 'listening' ? (
-                    <button
-                      onClick={handleStopListening}
-                      className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-lg shadow-rose-500/40 animate-pulse transition-all scale-105"
-                      title="Listening... Tap to Stop"
-                    >
-                      <MicOff className="w-7 h-7" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleStartListening}
-                      className="w-16 h-16 rounded-full bg-gradient-to-tr from-brand-600 to-emerald-600 hover:from-brand-500 hover:to-emerald-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/30 hover:scale-105 active:scale-95 transition-all"
-                      title="Tap to speak"
-                    >
-                      <Mic className="w-7 h-7" />
-                    </button>
-                  )}
-
-                  <div className="mt-2.5">
-                    {voiceState === 'listening' ? (
-                      <div className="flex items-center gap-2 text-rose-600 font-extrabold text-sm">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
-                        <span>Listening... Speak now in Hindi or English</span>
-                      </div>
-                    ) : (
-                      <div className="text-slate-800 font-extrabold text-sm">
-                        🎤 Tap to Ask (or type your question below)
-                      </div>
-                    )}
-                    <span className="text-[11px] text-slate-500 block mt-0.5">
-                      Works with Hindi, Hinglish, and English queries
-                    </span>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Ask me about mandi prices in any Indian state, crop diseases, fertilizer dosage, irrigation schedules, or speak a command to control the marketplace.
+                </p>
               </div>
 
-              {/* Prompt Suggestion Chips */}
-              <div>
-                <span className="text-xs font-bold text-slate-600 block mb-2 px-1">
-                  Example questions (Tap to ask):
+              {/* Preset Query Chips */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Tap a question to try:
                 </span>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {presetQueries.map((item, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleExecuteQuery(item.query, false)}
-                      className="text-xs px-3 py-1.5 rounded-xl bg-white hover:bg-brand-50 hover:text-brand-800 text-slate-700 border border-slate-200 hover:border-brand-300 transition-all text-left flex items-center gap-1.5 shadow-2xs font-medium"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-brand-50 border border-slate-200 hover:border-brand-300 text-slate-700 hover:text-brand-800 text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5 text-left"
                     >
                       <span>{item.emoji}</span>
                       <span>{item.label}</span>
@@ -377,171 +408,167 @@ export default function KrishiAiModal({
             </div>
           )}
 
-          {/* Active Messages List */}
+          {/* Render Chat Messages */}
           {messages.map((msg) => (
-            <div key={msg.id} className="space-y-2">
-              {/* User Question Bubble */}
-              {msg.sender === 'user' && (
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] bg-slate-900 text-white p-3.5 rounded-2xl rounded-tr-xs shadow-xs space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                      <span className="font-semibold flex items-center gap-1">
-                        {msg.isVoice ? (
-                          <>
-                            <Mic className="w-3 h-3 text-emerald-400" />
-                            <span>You said:</span>
-                          </>
-                        ) : (
-                          <>
-                            <User className="w-3 h-3 text-slate-400" />
-                            <span>You asked:</span>
-                          </>
-                        )}
-                      </span>
-                      <span>{msg.timestamp}</span>
-                    </div>
-                    <p className="text-xs sm:text-sm font-medium leading-relaxed">
-                      "{msg.text}"
-                    </p>
-                  </div>
+            <div
+              key={msg.id}
+              className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              {msg.sender === 'assistant' && (
+                <div className="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                  <Bot className="w-4 h-4" />
                 </div>
               )}
 
-              {/* Assistant Reply Card */}
-              {msg.sender === 'assistant' && (
-                <div className="flex justify-start">
-                  <div className="max-w-[92%] bg-white border border-emerald-200/80 rounded-2xl rounded-tl-xs p-4 sm:p-5 shadow-xs space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center justify-between text-xs border-b border-slate-100 pb-2.5">
-                      <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{msg.understoodSummary || 'Agricultural Intelligence Response'}</span>
+              <div
+                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 space-y-2.5 shadow-2xs ${
+                  msg.sender === 'user'
+                    ? 'bg-brand-600 text-white rounded-br-none'
+                    : 'bg-white border border-slate-200/80 text-slate-900 rounded-bl-none'
+                }`}
+              >
+                {/* User Message Header */}
+                {msg.sender === 'user' && msg.isVoice && (
+                  <div className="flex items-center gap-1 text-[10px] text-amber-200 font-bold uppercase">
+                    <Mic className="w-3 h-3" />
+                    <span>Captured from Speech</span>
+                  </div>
+                )}
+
+                {/* Assistant Understood Badge */}
+                {msg.sender === 'assistant' && msg.understoodSummary && (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{msg.understoodSummary}</span>
+                  </div>
+                )}
+
+                {/* Message Body */}
+                <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-line font-medium">
+                  {msg.text}
+                </div>
+
+                {/* Supplementary Agronomy / AI Explanation */}
+                {msg.aiExplanation && (
+                  <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-950 text-xs space-y-1 mt-2">
+                    <div className="flex items-center justify-between text-[10px] font-extrabold uppercase text-emerald-700">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Agricultural Intelligence
                       </span>
-                      {msg.intent && (
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 shrink-0">
-                          {msg.intent}
+                      {msg.aiSource && (
+                        <span className="font-semibold text-emerald-600 truncate max-w-[200px]">
+                          {msg.aiSource}
                         </span>
                       )}
                     </div>
-
-                    {/* Formatted Reply Body */}
-                    <div className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-normal">
-                      {msg.text}
-                    </div>
-
-                    {/* Supplementary AI Context if available */}
-                    {msg.aiExplanation && (
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1">
-                        <span className="font-bold text-slate-900 block flex items-center gap-1">
-                          <Bot className="w-3.5 h-3.5 text-brand-600" />
-                          Market Context:
-                        </span>
-                        <p className="text-slate-600 leading-relaxed">{msg.aiExplanation}</p>
-                      </div>
-                    )}
-
-                    {/* Optional Feature Action Button */}
-                    {msg.action && (
-                      <div className="pt-1">
-                        <button
-                          onClick={() => handleActionClick(msg.action)}
-                          className="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors group"
-                        >
-                          <span>{msg.action.label}</span>
-                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                        <span className="text-[10px] text-slate-400 block text-center mt-1">
-                          Click to navigate to the module (or continue chatting below)
-                        </span>
-                      </div>
-                    )}
+                    <p className="whitespace-pre-line leading-relaxed font-medium">
+                      {msg.aiExplanation}
+                    </p>
                   </div>
+                )}
+
+                {/* Safe Interactive Action Button */}
+                {msg.action && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleActionClick(msg.action, msg.requiresConfirmation)}
+                      className={`w-full py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition-all ${
+                        msg.requiresConfirmation || msg.action.isHighRisk
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                          : 'bg-brand-600 hover:bg-brand-700 text-white'
+                      }`}
+                    >
+                      <span>{msg.action.label || 'View in Platform'}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Timestamp */}
+                <div className={`text-[10px] text-right font-medium ${msg.sender === 'user' ? 'text-white/70' : 'text-slate-400'}`}>
+                  {msg.timestamp}
+                </div>
+              </div>
+
+              {msg.sender === 'user' && (
+                <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                  <User className="w-4 h-4" />
                 </div>
               )}
             </div>
           ))}
 
-          {/* Processing / Loading State */}
+          {/* Processing Indicator */}
           {isProcessing && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-4 shadow-xs flex items-center gap-3 text-slate-700 text-xs sm:text-sm">
-                <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
-                <div className="space-y-0.5">
-                  <span className="font-bold block text-slate-900">Processing inquiry...</span>
-                  <span className="text-xs text-slate-500">Grounded against platform reference mandi data</span>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4" />
               </div>
-            </div>
-          )}
-
-          {/* User-friendly Notice / Error Banner if any */}
-          {statusNotice && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{statusNotice}</span>
+              <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-2xs flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce" />
+                <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce [animation-delay:0.4s]" />
+                <span className="text-xs text-slate-500 font-semibold pl-1">Analyzing agricultural data...</span>
+              </div>
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Listening Active Overlay Banner */}
-        {voiceState === 'listening' && (
-          <div className="px-4 py-2 bg-rose-50 border-t border-rose-200 flex items-center justify-between text-xs text-rose-800">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
-              <span className="font-bold">Listening now... Speak your question</span>
-            </div>
+        {/* Input Bar & Voice Trigger */}
+        <div className="p-3 sm:p-4 bg-white border-t border-slate-200 shrink-0">
+          <form onSubmit={handleAskSubmit} className="flex items-center gap-2">
+            
+            {/* Voice Mic Button */}
             <button
-              onClick={handleStopListening}
-              className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-bold text-[11px] hover:bg-rose-700 transition-colors"
+              type="button"
+              onClick={voiceState === 'listening' ? handleStopListening : handleStartListening}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 shadow-sm ${
+                voiceState === 'listening'
+                  ? 'bg-rose-600 text-white animate-pulse ring-4 ring-rose-200'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+              title={voiceState === 'listening' ? 'Stop Listening' : 'Tap to Speak (Voice Search)'}
             >
-              Stop Listening
+              {voiceState === 'listening' ? (
+                <MicOff className="w-5 h-5 text-amber-300" />
+              ) : (
+                <Mic className="w-5 h-5 text-amber-300" />
+              )}
             </button>
+
+            {/* Query Input */}
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder={voiceState === 'listening' ? 'Listening to your speech...' : 'बोलें या लिखें: e.g. Prayagraj mein pyaz ka kya bhaav hai?'}
+                className="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-300 bg-slate-50 focus:bg-white text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-inner"
+              />
+            </div>
+
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={isProcessing || !inputText.trim()}
+              className="w-12 h-12 rounded-2xl bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 text-white flex items-center justify-center transition-all shrink-0 shadow-sm disabled:cursor-not-allowed"
+              title="Send Query"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </form>
+
+          {/* Footer note */}
+          <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-slate-400">
+            <span>Powered by Krishi NLU &amp; Verified Agricultural Intelligence</span>
+            <span>Truth &gt; Demo Appearance</span>
           </div>
-        )}
+        </div>
 
-        {/* Persistent Input & Ask Controls */}
-        <form onSubmit={handleAskSubmit} className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={
-              speechLang === 'hi-IN'
-                ? "सवाल पूछें (उदा: गेहूं का प्राइस बताओ, मुझे 100 क्विंटल चाहिए)..."
-                : "Type your question (e.g. What is the wheat price?)..."
-            }
-            className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white font-medium"
-            disabled={isProcessing}
-          />
-
-          {/* Microphone / Tap to Ask Button */}
-          <button
-            type="button"
-            onClick={voiceState === 'listening' ? handleStopListening : handleStartListening}
-            disabled={isProcessing}
-            className={`p-2.5 rounded-xl border transition-all ${
-              voiceState === 'listening'
-                ? 'bg-rose-600 text-white border-rose-600 animate-pulse'
-                : 'bg-slate-100 hover:bg-brand-50 text-slate-700 hover:text-brand-700 border-slate-200'
-            }`}
-            title={voiceState === 'listening' ? "Stop listening" : "Tap to speak (Voice Search)"}
-          >
-            {voiceState === 'listening' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-
-          {/* Ask Button */}
-          <button
-            type="submit"
-            disabled={isProcessing || !inputText.trim()}
-            className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors shadow-xs"
-          >
-            <Send className="w-4 h-4" />
-            <span>Ask</span>
-          </button>
-        </form>
       </div>
     </div>
   );

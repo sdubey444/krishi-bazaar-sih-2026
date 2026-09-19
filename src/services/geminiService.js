@@ -1,23 +1,26 @@
 // Gemini AI Explanation & Assistant Service
-// Grounds responses in structured platform market data with reliable fallback
+// Grounds responses in structured platform market data and verified ICAR Agronomy Knowledge
+// Principle: TRUTH > DEMO APPEARANCE (transparently labels Live Gemini AI vs Grounded Offline Knowledge)
 
 import { CROP_MARKET_SERIES } from '../data/marketData.js';
+import { searchAgronomyKnowledgeBase } from '../data/agronomyKnowledgeBase.js';
 
 export const askKrishiAi = async (query, contextData = {}) => {
   const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' && process.env?.VITE_GEMINI_API_KEY);
   const cropId = contextData.cropId?.toLowerCase() || 'wheat';
   const series = CROP_MARKET_SERIES[cropId] || CROP_MARKET_SERIES['wheat'];
 
-  // If Gemini API key is provided, attempt live call
+  // If Gemini API key is provided, attempt live AI call
   if (apiKey && apiKey !== 'your_gemini_api_key') {
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const systemInstruction = `You are Krishi AI, the intelligent agricultural analytics assistant for Krishi Bazaar.
-Use ONLY the provided verified market data context. Be concise, direct, and explain trends using real agricultural factors.
+      const systemInstruction = `You are Krishi Sahayak, the intelligent agricultural advisor for Krishi Bazaar.
+Provide practical, scientific agronomy advice and market insights for Indian farmers.
+Always be direct, compassionate, and farmer-friendly.
 Do not invent prices or fake statistics.
 Context Data:
 Crop: ${series.cropName} (${series.category})
-Current Price: ₹${series.currentPrice}/kg
+Reference Price: ₹${series.currentPrice}/kg
 Market Signal: ${series.marketSignal}
 AI Insight: ${series.aiInsight}
 Supply Status: ${series.supplyStatus}`;
@@ -46,14 +49,23 @@ Supply Status: ${series.supplyStatus}`;
         }
       }
     } catch (err) {
-      console.warn('Gemini API call failed, using explainable fallback intelligence', err);
+      console.warn('Gemini API call failed, using verified agronomy knowledge base', err);
     }
   }
 
   // Graceful explainable local intelligence fallback
-  // Generates grounded insights based on the selected crop's time-series data
   const qLower = query.toLowerCase();
 
+  // 1. Check for Agronomy & Crop Health Questions (Yellow leaves, disease, fertilizer, irrigation, etc.)
+  const agronomyMatch = searchAgronomyKnowledgeBase(query);
+  if (agronomyMatch && !qLower.includes('price') && !qLower.includes('rate') && !qLower.includes('bhav') && !qLower.includes('daam')) {
+    return {
+      source: 'Krishi Verified Agronomy Knowledge Base (Offline Reference - Add VITE_GEMINI_API_KEY for Live Gemini AI)',
+      text: `🌾 ${agronomyMatch.title}\n\n${agronomyMatch.summary}\n\nRecommendations:\n${agronomyMatch.remedy}\n\nNote: Grounded agricultural science guidance. Add VITE_GEMINI_API_KEY in environment for live conversational Gemini AI.`
+    };
+  }
+
+  // 2. Specific Crop Market Trends
   if (qLower.includes('why') && (qLower.includes('mustard') || cropId === 'mustard')) {
     return {
       source: 'Krishi Market Intelligence Engine (Prototype Model)',
@@ -82,6 +94,7 @@ Supply Status: ${series.supplyStatus}`;
     };
   }
 
+  // Default Platform Benchmark Record
   return {
     source: 'Krishi Market Intelligence Engine (Prototype Model)',
     text: `Based on structured reference data for ${series.cropName}: Reference Price (Demo/Reference Data) is ₹${series.currentPrice}/${series.unit}. Signal: "${series.marketSignal}". ${series.aiInsight} Note: Structured platform benchmark records, not live external web quotes.`

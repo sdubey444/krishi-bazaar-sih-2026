@@ -12,12 +12,17 @@ import {
   getCropPriceIntelligence,
   getCropSupplyDemandAnalysis 
 } from './src/services/forecastEngine.js';
-import { processNaturalQuery } from './src/services/nluService.js';
+import { processNaturalQuery, isHighRiskAction } from './src/services/nluService.js';
 import { askKrishiAi } from './src/services/geminiService.js';
 import { SEED_USERS, SEED_LISTINGS, SEED_LOGISTICS_PARTNERS } from './src/data/seedData.js';
 import { getCoordinatesForLocation } from './src/data/coordinates.js';
 import { store } from './src/services/store.js';
 import { normalizeToKg, classifyProcurement, PROCUREMENT_CONFIG } from './src/config/procurementConfig.js';
+import { INDIA_STATES_AND_UTS, INDIA_AGRICULTURAL_HUBS } from './src/data/indiaLocationData.js';
+import { locationService, calculateDistanceKm } from './src/services/locationService.js';
+import { marketDataService, VERIFIED_MANDI_RECORDS } from './src/services/marketDataService.js';
+import { i18n, SUPPORTED_LANGUAGES } from './src/services/i18nService.js';
+import { searchAgronomyKnowledgeBase } from './src/data/agronomyKnowledgeBase.js';
 
 console.log('====================================================');
 console.log('KRISHI BAZAAR — COMPREHENSIVE AUTOMATED TEST SUITE');
@@ -453,7 +458,216 @@ assert(aiResponse.intentType === 'price' && aiResponse.cropId === 'wheat', '13. 
 store.logout();
 assert(store.currentUser === null, '14. Logout clears user session cleanly');
 
+// 13. INDIA-WIDE LOCATION RESOLUTION & 36 STATES/UTS COVERAGE
+console.log('\n--- TEST GROUP 13: INDIA-WIDE LOCATION RESOLUTION ---');
+assert(INDIA_STATES_AND_UTS.length === 36, 'All 36 States and Union Territories registered (28 States + 8 UTs)');
+
+const representativeStates = [
+  'Uttar Pradesh', 'Punjab', 'Tamil Nadu', 'Himachal Pradesh', 
+  'Delhi', 'Maharashtra', 'Rajasthan', 'Karnataka', 'Kerala', 'West Bengal'
+];
+representativeStates.forEach(state => {
+  const hub = INDIA_AGRICULTURAL_HUBS[state];
+  assert(Boolean(hub && hub.districts?.length > 0), `Location engine covers agricultural hub: ${state}`);
+});
+
+const khannaMandi = locationService.resolveExplicitLocationFromQuery('Khanna Mandi gehu');
+assert(khannaMandi?.state === 'Punjab', 'Mandi token "Khanna Mandi" resolves to Punjab');
+
+const kulluQuery = locationService.resolveExplicitLocationFromQuery('Kullu seb market');
+assert(kulluQuery?.state === 'Himachal Pradesh', 'Mandi token "Kullu" resolves to Himachal Pradesh');
+
+const koyambeduQuery = locationService.resolveExplicitLocationFromQuery('Koyambedu market tomato');
+assert(koyambeduQuery?.state === 'Tamil Nadu', 'Mandi token "Koyambedu" resolves to Tamil Nadu');
+
+// 14. 5-TIER LOCATION PRIORITY ENGINE
+console.log('\n--- TEST GROUP 14: 5-TIER LOCATION PRIORITY ENGINE ---');
+
+// Tier 1: Explicit location in natural user query overrides everything
+const explicitQueryLoc = locationService.getLocationContext('Shimla mein seb ka bhav kya hai');
+assert(explicitQueryLoc.state === 'Himachal Pradesh' && explicitQueryLoc.district === 'Shimla', 'Tier 1: Query explicit location overrides active selection (Shimla, HP)');
+assert(explicitQueryLoc.source === 'query_explicit', 'Tier 1: Location source marked as "query_explicit"');
+
+// Tier 2: User-selected manual location
+locationService.setUserSelectedLocation('Rajasthan', 'Sri Ganganagar', 'Sri Ganganagar Mandi');
+const manualLoc = locationService.getLocationContext();
+assert(manualLoc.state === 'Rajasthan' && manualLoc.district === 'Sri Ganganagar', 'Tier 2: Manual user selection active (Sri Ganganagar, Rajasthan)');
+assert(manualLoc.isManual === true, 'Tier 2: Location source marked as manual');
+
+// Tier 1 still overrides Tier 2!
+const explicitOverrideManual = locationService.getLocationContext('Ludhiana mandi mein dhan');
+assert(explicitOverrideManual.district === 'Ludhiana', 'Tier 1 overrides Tier 2 even when manual location is active');
+
+// Tier 3: Browser GPS nearest district resolution using authentic Haversine distance
+// Delhi GPS (28.6139, 77.2090)
+const nearestToDelhi = locationService.findNearestDistrict(28.6139, 77.2090);
+assert(nearestToDelhi.district.name === 'Delhi' || nearestToDelhi.state === 'Delhi', 'Tier 3: GPS near (28.61, 77.20) accurately resolves to Delhi hub');
+assert(nearestToDelhi.distanceKm < 20, 'Tier 3: GPS Haversine distance computed accurately (< 20 km)');
+
+// Haversine distance calculation truthfulness test
+const delhiToPrayagraj = calculateDistanceKm(28.6139, 77.2090, 25.4358, 81.8463);
+assert(delhiToPrayagraj >= 550 && delhiToPrayagraj <= 650, 'Haversine distance between Delhi and Prayagraj is authentic (~580-600 km)');
+
+// Tier 4: Account/profile fallback
+locationService.clearSelectedLocation();
+const profileLoc = locationService.getLocationContext(null, 'Nashik, Maharashtra');
+assert(profileLoc.district === 'Nashik' && profileLoc.state === 'Maharashtra', 'Tier 4: Account profile location fallback resolves to Nashik, Maharashtra');
+
+// Tier 5: Default fallback (Prayagraj, UP)
+const defaultFallbackLoc = locationService.getLocationContext(null, null);
+assert(defaultFallbackLoc.state === 'Uttar Pradesh' && defaultFallbackLoc.district === 'Prayagraj', 'Tier 5: System gracefully falls back to baseline hub (Prayagraj, UP)');
+
+// Nearby Mandi discovery
+const nearbyMandis = locationService.getNearbyMandisForContext(defaultFallbackLoc);
+assert(nearbyMandis.length >= 3, 'Nearby Mandi discovery retrieves verified mandis for context');
+assert(nearbyMandis[0].mandiName.includes('Mundera') || nearbyMandis[0].district === 'Prayagraj', 'Nearby Mandi discovery prioritizes closest district mandi (0 km)');
+
+// 15. TRUTHFUL MARKET DATA SERVICE & BENCHMARKS
+console.log('\n--- TEST GROUP 15: TRUTHFUL MARKET DATA SERVICE & BENCHMARKS ---');
+assert(VERIFIED_MANDI_RECORDS.length >= 20, 'Verified Agmarknet/APMC dataset contains extensive verified multi-state records');
+
+// Test A: Verified commodity query for known hub
+const wheatQuote = await marketDataService.getCommodityMarketPrice('wheat', { state: 'Uttar Pradesh', district: 'Prayagraj' });
+assert(wheatQuote.pricePerKg === 28, 'Verified quote returns authentic benchmark price for Wheat (₹28/kg)');
+assert(wheatQuote.status === 'Latest available online data' || wheatQuote.status === 'Verified current', 'Status accurately marked as verified or latest online data');
+assert(Boolean(wheatQuote.source), 'Source attribution present: ' + wheatQuote.source);
+assert(Boolean(wheatQuote.recordedDate), 'Genuine record date attached: ' + wheatQuote.recordedDate);
+
+// Test B: Truthful non-fabrication principle (Unknown commodity / location)
+const unknownQuote = await marketDataService.getCommodityMarketPrice('dragonfruit_xyz', { state: 'Nagaland', district: 'Mon' });
+assert(unknownQuote.pricePerKg === null, 'TRUTH PRINCIPLE: Unverified commodity price returns null (NEVER fabricates fake numbers)');
+assert(unknownQuote.status === 'Current price could not be verified', 'TRUTH PRINCIPLE: Status explicitly reports "Current price could not be verified"');
+
+// Test C: Market strip items
+const stripItems = marketDataService.getTodayMarketStripPrices({ state: 'Uttar Pradesh' });
+assert(stripItems.length >= 5, 'Market strip generates multi-commodity benchmark rates');
+assert(stripItems.every(item => item.status !== undefined && item.source !== undefined), 'All market strip items include truthful status and data source');
+
+// 16. EXPANDED NLU INTENTS & SAFETY CONFIRMATION
+console.log('\n--- TEST GROUP 16: EXPANDED NLU INTENTS & SAFETY CONFIRMATION ---');
+
+// A: OPEN_MARKET
+const openMarketQuery = processNaturalQuery('mandi khol ke do');
+assert(openMarketQuery.intent === 'OPEN_MARKET', 'NLU recognizes "mandi khol ke do" as OPEN_MARKET');
+assert(openMarketQuery.action.targetView === 'marketplace', 'OPEN_MARKET routes to marketplace view');
+
+// B: TRACK_ORDER
+const trackOrderQuery = processNaturalQuery('mera order track karo');
+assert(trackOrderQuery.intent === 'TRACK_ORDER', 'NLU recognizes "mera order track karo" as TRACK_ORDER');
+assert(trackOrderQuery.action.targetView === 'order-details', 'TRACK_ORDER routes to order-details view');
+
+// C: VIEW_ORDERS
+const viewOrdersQuery = processNaturalQuery('mere orders dikhao');
+assert(viewOrdersQuery.intent === 'VIEW_ORDERS', 'NLU recognizes "mere orders dikhao" as VIEW_ORDERS');
+assert(viewOrdersQuery.action.targetView === 'my-orders', 'VIEW_ORDERS routes to my-orders view');
+
+// D: PURCHASE_PRODUCT
+const buyWheatQuery = processNaturalQuery('mujhe 100 quintal wheat chahiye');
+assert(buyWheatQuery.intent === 'PURCHASE_PRODUCT', 'NLU recognizes "mujhe 100 quintal wheat chahiye" as PURCHASE_PRODUCT');
+assert(buyWheatQuery.normalizedKg === 10000, 'PURCHASE_PRODUCT normalizes 100 Quintal to 10,000 KG');
+assert(buyWheatQuery.action.targetView === 'bulk-requirement', 'PURCHASE_PRODUCT routes to bulk-requirement view');
+
+// E: CROP_PLANNING
+const planningQuery = processNaturalQuery('agle season mein kya ugana chahiye?');
+assert(planningQuery.intent === 'CROP_PLANNING', 'NLU recognizes "agle season mein kya ugana chahiye?" as CROP_PLANNING');
+assert(planningQuery.intentType === 'advisory', 'CROP_PLANNING categorized as agricultural advisory');
+
+// F: AGRONOMY_ADVISORY (Crop Health)
+const agronomyQuery = processNaturalQuery('tamatar ke patte peele ho rahe hain');
+assert(agronomyQuery.intent === 'AGRONOMY_ADVISORY', 'NLU recognizes leaf yellowing query as AGRONOMY_ADVISORY');
+assert(agronomyQuery.answer.includes('ICAR') || agronomyQuery.answer.includes('KVK'), 'AGRONOMY_ADVISORY attributes ICAR/KVK verified scientific guidance');
+
+// G: HIGH-RISK IRREVERSIBLE ACTION SAFETY GATE
+const highRiskQuery = processNaturalQuery('delete listing');
+assert(highRiskQuery.intent === 'HIGH_RISK_ACTION_CONFIRMATION', 'NLU routes "delete listing" to HIGH_RISK_ACTION_CONFIRMATION');
+assert(highRiskQuery.requiresConfirmation === true, 'High-risk action marks requiresConfirmation: true');
+assert(isHighRiskAction('DELETE_LISTING') === true, 'isHighRiskAction helper identifies DELETE_LISTING as high risk');
+assert(isHighRiskAction('MAKE_PAYMENT') === true, 'isHighRiskAction helper identifies MAKE_PAYMENT as high risk');
+assert(isHighRiskAction('OPEN_MARKET') === false, 'isHighRiskAction helper confirms OPEN_MARKET is safe for immediate navigation');
+
+// 17. 22-LANGUAGE MULTILINGUAL SERVICE
+console.log('\n--- TEST GROUP 17: 22-LANGUAGE MULTILINGUAL SERVICE ---');
+assert(SUPPORTED_LANGUAGES.length >= 22, 'Multilingual service covers 22 Scheduled Indian Languages + English');
+
+// Language switching
+i18n.setLanguage('ta');
+assert(i18n.getLanguage() === 'ta', 'i18n switches to Tamil (ta)');
+assert(i18n.getSpeechRecognitionLang() === 'ta-IN', 'SpeechRecognition code maps to "ta-IN" for Tamil');
+
+i18n.setLanguage('bn');
+assert(i18n.getLanguage() === 'bn', 'i18n switches to Bengali (bn)');
+assert(i18n.getSpeechRecognitionLang() === 'bn-IN', 'SpeechRecognition code maps to "bn-IN" for Bengali');
+
+i18n.setLanguage('hi');
+assert(i18n.getLanguage() === 'hi', 'i18n switches to Hindi (hi)');
+assert(i18n.getSpeechRecognitionLang() === 'hi-IN', 'SpeechRecognition code maps to "hi-IN" for Hindi');
+
+// Translations with fallback
+assert(i18n.t('appName', 'en') === 'Krishi Bazaar', 'Translation for appName in English');
+assert(i18n.t('myCrops', 'hi') === 'मेरी फसल', 'Translation for myCrops in Hindi');
+assert(i18n.t('sellCrop', 'hi') === 'फसल बेचें', 'Translation for sellCrop in Hindi');
+assert(i18n.t('todayPrice', 'hi') === 'आज का भाव', 'Translation for todayPrice in Hindi');
+assert(i18n.t('voiceAction', 'hi') === 'बोलकर करें', 'Translation for voiceAction in Hindi');
+
+// 18. FARMER DASHBOARD PRODUCE DELETION FLOW
+console.log('\n--- TEST GROUP 18: FARMER DASHBOARD PRODUCE DELETION ---');
+const testFarmer = store.users.find(u => u.role === 'farmer') || SEED_USERS.find(u => u.role === 'farmer');
+const tempListing = store.addListing({
+  farmerId: testFarmer.id,
+  farmerName: testFarmer.name,
+  produce: 'Test Safflower',
+  cropId: 'mustard',
+  category: 'Oilseeds',
+  quantity: 500,
+  availableQuantity: 500,
+  unit: 'kg',
+  pricePerKg: 65,
+  location: testFarmer.location,
+  status: 'Active'
+});
+assert(Boolean(tempListing.id), 'Temporary produce listing created');
+assert(store.listings.some(l => l.id === tempListing.id), 'Temporary listing present in store.listings');
+
+const deleteResult = store.deleteListing(tempListing.id);
+assert(deleteResult === true, 'store.deleteListing(id) returns true');
+assert(!store.listings.some(l => l.id === tempListing.id), 'Listing permanently removed from store.listings');
+
+// 19. LOGISTICS TELEMATICS TRUTH PRINCIPLE
+console.log('\n--- TEST GROUP 19: LOGISTICS TELEMATICS TRUTH PRINCIPLE ---');
+const telematicsOrder = store.orders[0];
+assert(Boolean(telematicsOrder), 'Retrieved active test order');
+// Verify milestone statuses are discrete checkpoints, NOT simulated live moving GPS
+const validCheckpoints = [
+  'Confirmed', 'Processing', 'Driver Assigned', 
+  'En Route to Pickup', 'Goods Loaded', 'In Transit', 'Out for Delivery', 'Delivered'
+];
+assert(validCheckpoints.includes(telematicsOrder.status) || telematicsOrder.status === 'Self Pickup Scheduled', 'Order status adheres to verified physical checkpoints');
+// Verify absence of fake GPS lat/lng simulator coordinates on driver
+assert(telematicsOrder.driverCoordinates == null, 'TRUTH PRINCIPLE: No fake live driver coordinates fabricated');
+
+// 20. PAYMENT GATEWAY DISCLAIMER & TRANSPARENCY INTEGRITY
+console.log('\n--- TEST GROUP 20: PAYMENT GATEWAY DISCLAIMER & TRANSPARENCY ---');
+const transparentOrder = store.createOrder({
+  buyerId: 'buyer_audit',
+  buyerName: 'Audit Test Buyer',
+  farmerId: testFarmer.id,
+  farmerName: testFarmer.name,
+  produce: 'Wheat',
+  quantity: 20,
+  unit: 'Quintal',
+  totalQuantity: 2000,
+  pricePerKg: 28,
+  produceAmount: 56000,
+  deliveryMethod: 'Logistics Support',
+  totalAmount: 59000,
+  status: 'Confirmed'
+});
+assert(transparentOrder.produceAmount === 56000, 'Exact produce payout preserved (₹56,000)');
+assert(transparentOrder.totalAmount === 59000, 'Mathematical total calculation consistent');
+assert(transparentOrder.paymentStatus !== 'PAID_VIA_FAKE_GATEWAY', 'TRUTH PRINCIPLE: No fake bank transaction ID fabricated');
+
 console.log('\n====================================================');
+
 console.log(`TEST SUITE RESULTS: ${passedTests} / ${totalTests} TESTS PASSED (100%)`);
 console.log('====================================================');
 

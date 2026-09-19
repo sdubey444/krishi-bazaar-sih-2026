@@ -405,6 +405,45 @@ export default function SupplyAggregationView({
             </div>
           )}
 
+          {/* PAYMENT & DIGITAL ESCROW CHOICE (PROTOTYPE DEMO) */}
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                Payment & Digital Escrow Settlement
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 uppercase">
+                Prototype Demo Flow
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div className="p-3 rounded-xl border-2 border-emerald-500 bg-emerald-50/50 cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-950">Prototype Escrow</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <p className="text-[11px] text-emerald-800 mt-1">Simulated escrow lock for hackathon evaluation. No real money deducted.</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 opacity-75">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700">UPI / NetBanking</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">Production</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">Direct bank escrow via RazorpayX / Cashfree gateway API.</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 opacity-75">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700">Pay on Delivery</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">Mandi Gate</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">Settlement at Mandi weighbridge or farm collection gate.</p>
+              </div>
+            </div>
+          </div>
+
           {/* TOTAL ORDER SUMMARY CARD */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-brand-950 text-white flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -422,11 +461,18 @@ export default function SupplyAggregationView({
             <button
               onClick={handleConfirmOrder}
               disabled={isOrdering}
-              className="px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 font-black text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 font-black text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{isOrdering ? 'Confirming Order...' : `Confirm Order (${deliveryChoice})`}</span>
+              <span>{isOrdering ? 'Confirming Order...' : `Place Order & Lock Escrow (${deliveryChoice})`}</span>
             </button>
+          </div>
+
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 space-y-0.5">
+            <span className="font-extrabold uppercase tracking-wider block">Payment Gateway Notice (Prototype Demonstration):</span>
+            <p className="leading-relaxed">
+              Digital escrow lock is demonstrated as a prototype workflow for SIH evaluation. In commercial production, fund collection is settled through licensed banking gateways (RazorpayX / NPCI UPI AutoPay). Order is created in verified "Confirmed" status.
+            </p>
           </div>
         </div>
       )}

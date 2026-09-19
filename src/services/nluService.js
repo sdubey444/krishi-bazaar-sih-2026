@@ -1,26 +1,33 @@
 // Krishi Bazaar Natural Language Understanding (NLU) Engine
 // Supports Hindi (Devanagari), Hinglish (Roman Hindi), and English
-// Performs intent identification, crop & unit extraction, and platform action routing
+// Performs intent identification, crop & unit extraction, India-wide location detection, and platform action routing
 
 import { CROPS } from '../config/crops.js';
 import { getCropPriceIntelligence, getCropDemandForecast, getCropSupplyDemandAnalysis } from './forecastEngine.js';
+import { locationService } from './locationService.js';
+import { marketDataService } from './marketDataService.js';
+import { searchAgronomyKnowledgeBase } from '../data/agronomyKnowledgeBase.js';
 import { store } from './store.js';
 
-// Crop Lexicon for Multilingual Entity Recognition
+// Expanded Crop Lexicon for Multilingual Entity Recognition
 const CROP_SYNONYMS = {
-  wheat: ['wheat', 'gehu', 'gehoon', 'sharbati', 'lokwan', 'गेहूं', 'गेहू', 'गेहूँ'],
-  rice: ['rice', 'chawal', 'dhan', 'paddy', 'sona masoori', 'चावल', 'धान'],
+  wheat: ['wheat', 'gehu', 'gehoon', 'sharbati', 'lokwan', 'गेहूं', 'गेहू', 'गेहूँ', 'कਣਕ'],
+  rice: ['rice', 'chawal', 'dhan', 'paddy', 'sona masoori', 'चावल', 'धान', 'ਝੋਨਾ'],
   mustard: ['mustard', 'sarson', 'sarso', 'rai', 'toria', 'सरसों', 'राई'],
   maize: ['maize', 'makka', 'corn', 'bhutta', 'मक्का', 'भुट्टा'],
   soybean: ['soybean', 'soya', 'soyabean', 'सोयाबीन', 'सोया'],
-  groundnut: ['groundnut', 'peanut', 'mungfali', 'moongphali', 'मूंगफली'],
+  groundnut: ['groundnut', 'peanut', 'mungfali', 'moongphali', 'मूंगफली', 'મગફળી'],
   chickpea: ['chickpea', 'chana', 'gram', 'desi chana', 'kabuli chana', 'चना'],
   lentil: ['lentil', 'masoor', 'masur', 'मसूर'],
   pigeon_pea: ['pigeon pea', 'arhar', 'tur', 'toor', 'अरहर', 'तूर'],
-  potato: ['potato', 'aloo', 'alu', 'आलू'],
-  tomato: ['tomato', 'tamatar', 'टमाटर'],
-  onion: ['onion', 'pyaz', 'pyaaz', 'कांदा', 'प्याज'],
-  sugarcane_jaggery: ['jaggery', 'gud', 'gur', 'sugarcane', 'गुड़', 'गन्ना']
+  potato: ['potato', 'aloo', 'alu', 'आलू', 'बटाटा', 'ਆਲੂ'],
+  tomato: ['tomato', 'tamatar', 'टमाटर', 'टोमॅटो', 'தக்காளி'],
+  onion: ['onion', 'pyaz', 'pyaaz', 'कांदा', 'प्याज', 'வெங்காயம்'],
+  sugarcane_jaggery: ['jaggery', 'gud', 'gur', 'sugarcane', 'गुड़', 'गन्ना'],
+  apple: ['apple', 'seb', 'सेब', 'سیب'],
+  chilli: ['chilli', 'mirch', 'mirchi', 'मिर्च', 'लाल मिर्च', 'మిరపకాయలు'],
+  garlic: ['garlic', 'lahsun', 'lahsun', 'लहसुन'],
+  coconut: ['coconut', 'nariyal', 'नारियल', 'தேங்காய்']
 };
 
 /**
@@ -30,14 +37,27 @@ export const extractCrop = (text) => {
   const clean = text.toLowerCase();
   for (const [cropId, synonyms] of Object.entries(CROP_SYNONYMS)) {
     for (const syn of synonyms) {
-      if (clean.includes(syn)) {
-        const meta = CROPS.find(c => c.id === cropId);
-        return {
-          id: cropId,
-          name: meta?.name || cropId,
-          emoji: meta?.emoji || '🌾',
-          category: meta?.category || 'Grains'
-        };
+      if (/^[a-z0-9\s_-]+$/i.test(syn)) {
+        const regex = new RegExp(`(^|\\W)${syn}(\\W|$)`, 'i');
+        if (regex.test(clean)) {
+          const meta = CROPS.find(c => c.id === cropId);
+          return {
+            id: cropId,
+            name: meta?.name || (cropId.charAt(0).toUpperCase() + cropId.slice(1)),
+            emoji: meta?.emoji || '🌾',
+            category: meta?.category || 'Grains'
+          };
+        }
+      } else {
+        if (clean.includes(syn)) {
+          const meta = CROPS.find(c => c.id === cropId);
+          return {
+            id: cropId,
+            name: meta?.name || (cropId.charAt(0).toUpperCase() + cropId.slice(1)),
+            emoji: meta?.emoji || '🌾',
+            category: meta?.category || 'Grains'
+          };
+        }
       }
     }
   }
@@ -52,7 +72,7 @@ export const extractQuantity = (text) => {
   const clean = text.toLowerCase();
 
   // Look for numbers followed by unit words
-  // e.g., "100 quintal", "100 क्विंटल", "5000 kilo", "5000 kg", "10 ton", "2000"
+  // e.g., "100 quintal", "100 क्विंटल", "5000 kilo", "5000 kg", "50 kilo", "10 ton", "2000"
   const regex = /(\d+(?:,\d+)*(?:\.\d+)?)\s*(quintal|kintal|क्विंटल|kilo|kg|kgs|किलो|ton|tons|टन)?/i;
   const match = clean.match(regex);
 
@@ -86,9 +106,9 @@ export const extractQuantity = (text) => {
 };
 
 /**
- * Understands natural user queries and returns grounded platform intelligence and action
+ * Understands natural user queries and returns grounded platform intelligence and website actions
  */
-export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
+export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationContext = null) => {
   const query = (rawQuery || '').trim();
   const lower = query.toLowerCase();
 
@@ -99,6 +119,10 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
     };
   }
 
+  // Detect explicit location in query (Priority 1)
+  const explicitLoc = locationService.resolveExplicitLocationFromQuery(query);
+  const activeLocation = explicitLoc || locationContext || locationService.getLocationContext();
+
   const crop = extractCrop(query) || {
     id: defaultCropId,
     name: defaultCropId.charAt(0).toUpperCase() + defaultCropId.slice(1),
@@ -107,12 +131,44 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
 
   const qty = extractQuantity(query);
 
-  // 1. PRICE INTENT
-  // "gehu ka rate kya hai?", "mere area me wheat ka price batao", "गेहूं का प्राइस बताओ", "wheat price"
+  // 1. OPEN MARKET INTENT
+  // "mandi khol ke do", "mandi kholo", "open marketplace", "market dekho", "मंडी खोल के दो", "मंडी खोलो"
+  const isOpenMarket =
+    lower.includes('mandi khol') ||
+    lower.includes('mandi kho') ||
+    lower.includes('bazaar khol') ||
+    lower.includes('bazar khol') ||
+    lower.includes('open market') ||
+    lower.includes('open marketplace') ||
+    lower.includes('मंडी खोल') ||
+    lower.includes('मंडी खोलो') ||
+    lower.includes('बाज़ार खोलो');
+
+  // 2. TRACK ORDER INTENT
+  // "mera order track karo", "order status", "track my order", "ट्रैक करो", "ऑर्डर ट्रैक"
+  const isTrackOrder =
+    lower.includes('track') ||
+    lower.includes('order status') ||
+    lower.includes('kahan pahuncha') ||
+    lower.includes('कहाँ पहुँचा') ||
+    lower.includes('ट्रैक करो') ||
+    lower.includes('ट्रैक');
+
+  // 3. VIEW ORDERS INTENT
+  // "mere orders dikhao", "my orders", "pichle order", "मेरे ऑर्डर दिखाओ"
+  const isViewOrders =
+    (lower.includes('mere order') ||
+     lower.includes('my order') ||
+     lower.includes('orders dikhao') ||
+     lower.includes('मेरे ऑर्डर')) && !isTrackOrder;
+
+  // 4. PRICE INTENT
+  // "gehu ka rate kya hai?", "Prayagraj mein aaj pyaz ka kya bhaav hai?", "mere area me wheat ka price batao", "गेहूं का प्राइस बताओ"
   const isPrice =
     lower.includes('rate') ||
     lower.includes('price') ||
     lower.includes('bhav') ||
+    lower.includes('bhaav') ||
     lower.includes('daam') ||
     lower.includes('kimat') ||
     lower.includes('प्राइस') ||
@@ -121,7 +177,7 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
     lower.includes('दाम') ||
     lower.includes('कीमत');
 
-  // 2. SELL INTENT
+  // 5. SELL INTENT
   // "mere paas 5000 kg wheat hai, mujhe buyer chahiye", "bechna hai", "बेचना", "मेरे पास 5000 किलो गेहूं है"
   const isSell =
     lower.includes('bechna') ||
@@ -138,8 +194,22 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
     lower.includes('विक्रय') ||
     lower.includes('ग्राहक चाहिए');
 
-  // 3. BUY INTENT
-  // "mujhe 100 quintal wheat chahiye", "kharidna hai", "खरीदना", "चाहिए" (without bechna)
+  // 6. CROP PLANNING / ADVISOR INTENT
+  // "agle season mein kya ugana chahiye?", "kaunsi fasal ki demand zyada hai?", "which crop has high demand?", "what should I grow?"
+  const isCropPlanning =
+    lower.includes('agle season') ||
+    lower.includes('next season') ||
+    lower.includes('kya ugaye') ||
+    lower.includes('what should i grow') ||
+    lower.includes('kya ugana') ||
+    lower.includes('ugana chahiye') ||
+    lower.includes('ugaye') ||
+    lower.includes('फसल चक्र') ||
+    lower.includes('क्या उगाएं') ||
+    lower.includes('क्या उगाना चाहिए');
+
+  // 7. BUY INTENT
+  // "mujhe 50 kilo aloo chahiye", "mujhe 100 quintal wheat chahiye", "kharidna hai", "खरीदना", "चाहिए"
   const isBuy =
     (lower.includes('chahiye') ||
       lower.includes('kharidna') ||
@@ -148,24 +218,21 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
       lower.includes('lena hai') ||
       lower.includes('चाहिए') ||
       lower.includes('खरीदना')) &&
-    !isSell;
+    !isSell &&
+    !isCropPlanning;
 
-  // 4. DEMAND / ADVISOR INTENT
-  // "kaunsi fasal ki demand zyada hai?", "which crop has high demand?", "what should I grow?"
   const isDemand =
     lower.includes('demand') ||
     lower.includes('mang') ||
     lower.includes('zyada demand') ||
-    lower.includes('kya ugaye') ||
-    lower.includes('what should i grow') ||
-    lower.includes('next season') ||
     lower.includes('advisor') ||
     lower.includes('मांग') ||
-    lower.includes('डिमांड') ||
-    lower.includes('फसल');
+    lower.includes('डिमांड');
 
-  // 5. NEARBY / LISTINGS SEARCH INTENT
-  // "mere pass wale kisanon ka gehu dikhao", "show wheat listings", "available listings"
+  // 8. AGRONOMY & CROP HEALTH INTENT (Yellow leaves, disease, pest, fertilizer, irrigation)
+  const agronomyMatch = searchAgronomyKnowledgeBase(query);
+
+  // 9. SEARCH LISTINGS INTENT
   const isSearch =
     lower.includes('dikhao') ||
     lower.includes('dhundo') ||
@@ -177,8 +244,7 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
     lower.includes('दिखाओ') ||
     lower.includes('किसान');
 
-  // 6. LOGISTICS INTENT
-  // "logistics kaise kaam karta hai?", "delivery charge", "truck", "pickup", "ट्रक बुकिंग"
+  // 10. LOGISTICS INTENT
   const isLogistics =
     lower.includes('logistics') ||
     lower.includes('delivery') ||
@@ -196,16 +262,92 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat') => {
     lower.includes('डिलीवरी') ||
     lower.includes('पिकअप');
 
+  // 11. HIGH-RISK IRREVERSIBLE ACTIONS (Requires explicit user confirmation)
+  const isHighRisk =
+    lower.includes('delete account') ||
+    lower.includes('delete listing') ||
+    lower.includes('cancel order') ||
+    lower.includes('pay now') ||
+    lower.includes('make payment') ||
+    lower.includes('रद्द करो');
+
   // DISPATCH RESPONSES:
 
-  // A. BUY QUERY
+  // HIGH RISK SAFETY CHECK
+  if (isHighRisk) {
+    return {
+      intent: 'HIGH_RISK_ACTION_CONFIRMATION',
+      intentType: 'high_risk',
+      understoodSummary: '⚠️ Explicit User Confirmation Required',
+      answer: `High-risk action requested: "${query}".\n\nAI will not automatically execute irreversible financial or deletion actions. Please confirm your decision explicitly below.`,
+      requiresConfirmation: true,
+      action: {
+        label: 'Confirm High-Risk Action',
+        isHighRisk: true,
+        targetView: 'confirm_modal',
+        params: { actionQuery: query }
+      }
+    };
+  }
+
+  // A. OPEN MARKET INTENT
+  if (isOpenMarket) {
+    return {
+      intent: 'OPEN_MARKET',
+      intentType: 'navigation',
+      crop: crop.name,
+      understoodSummary: `🏪 Understood: Opening Krishi Bazaar Marketplace`,
+      answer: `Opening the Krishi Bazaar Marketplace. Here you can explore verified farmer produce lots with direct transparent pricing and no middleman cuts.`,
+      action: {
+        label: 'Open Marketplace',
+        targetView: 'marketplace',
+        params: {}
+      }
+    };
+  }
+
+  // B. TRACK ORDER INTENT
+  if (isTrackOrder) {
+    const state = store.getState();
+    const latestOrder = state.orders?.[0];
+    const orderRef = latestOrder?.id || 'ORD-2026-8812';
+
+    return {
+      intent: 'TRACK_ORDER',
+      intentType: 'navigation',
+      understoodSummary: `🚚 Understood: Track Order (${orderRef})`,
+      answer: `Opening order tracking for ${orderRef}. Current Status: ${latestOrder?.status || 'Confirmed'}. Verified milestone-based checkpoints are displayed.`,
+      action: {
+        label: `Track Order ${orderRef}`,
+        targetView: 'order-details',
+        params: { orderId: orderRef }
+      }
+    };
+  }
+
+  // C. VIEW ORDERS INTENT
+  if (isViewOrders) {
+    return {
+      intent: 'VIEW_ORDERS',
+      intentType: 'navigation',
+      understoodSummary: `📋 Understood: View My Orders`,
+      answer: `Opening your order history and status overview.`,
+      action: {
+        label: 'View Orders Dashboard',
+        targetView: 'my-orders',
+        params: {}
+      }
+    };
+  }
+
+  // D. BUY INTENT ("mujhe 50 kilo aloo chahiye", "100 quintal wheat")
   if (isBuy) {
     const targetQtyKg = qty ? qty.normalizedKg : 10000;
     const targetUnit = qty?.unit || (targetQtyKg >= 100 ? 'Quintal' : 'kg');
     const targetDisplayQty = qty ? qty.displayString : `${targetQtyKg.toLocaleString()} KG`;
 
     return {
-      intent: 'Buy Produce',
+      intent: 'PURCHASE_PRODUCT',
       intentType: 'buy',
       crop: crop.name,
       cropId: crop.id,
@@ -233,13 +375,13 @@ In Krishi Bazaar, you can purchase any quantity directly through our unified Buy
     };
   }
 
-  // B. SELL QUERY
+  // E. SELL INTENT ("mere paas 5000 kilo wheat hai, mujhe buyer chahiye")
   if (isSell) {
     const sellQtyKg = qty ? qty.normalizedKg : 5000;
     const sellDisplayQty = qty ? qty.displayString : '5,000 KG';
 
     return {
-      intent: 'Sell Produce',
+      intent: 'SELL_PRODUCE',
       intentType: 'sell',
       crop: crop.name,
       cropId: crop.id,
@@ -266,18 +408,24 @@ You can list your produce directly for buyers on Krishi Bazaar with zero middlem
     };
   }
 
-  // C. PRICE QUERY
+  // F. PRICE QUERY (Grounds in Location + Agmarknet Dataset + Forecast Engine)
   if (isPrice) {
     const priceData = getCropPriceIntelligence(crop.id);
+    const locName = `${activeLocation.district || ''}, ${activeLocation.state || 'Uttar Pradesh'}`.trim();
+    const mandiName = activeLocation.mandi || `${activeLocation.district || 'Regional'} Mandi`;
+
     return {
-      intent: 'Price Search',
+      intent: 'MARKET_PRICE_QUERY',
       intentType: 'price',
       crop: crop.name,
       cropId: crop.id,
-      understoodSummary: `${crop.emoji} Understood: ${crop.name} Market Price Information`,
+      location: activeLocation,
+      understoodSummary: `${crop.emoji} Understood: ${crop.name} Market Price Information (${locName})`,
       answer: `Here is the structured price information for ${crop.emoji} ${crop.name}:
 
 • Reference Price (Demo/Reference Data): ₹${priceData.currentPrice}/kg
+• Mandi / Market: ${mandiName}
+• Location: ${locName}
 • Estimated Price (Next Cycle Trend): ₹${priceData.estimatedPrice}/kg (${priceData.percentageChange >= 0 ? '+' : ''}${priceData.percentageChange}%)
 • Trend Direction: Price is ${priceData.trend}
 • Market Insight: ${priceData.marketSignal}
@@ -286,12 +434,62 @@ Note: Price data is based on available regional platform reference records. Not 
       action: {
         label: `View Full ${crop.name} Price Intelligence`,
         targetView: 'market-intel',
+        params: { cropId: crop.id, location: activeLocation }
+      }
+    };
+  }
+
+  // G. CROP PLANNING / ADVISORY INTENT ("agle season mein kya ugana chahiye?")
+  if (isCropPlanning) {
+    return {
+      intent: 'CROP_PLANNING',
+      intentType: 'advisory',
+      crop: crop.name,
+      location: activeLocation,
+      understoodSummary: `🌱 Understood: Seasonal Crop Planning for ${activeLocation.state}`,
+      answer: `Location-aware seasonal crop planning for ${activeLocation.district || activeLocation.state}:
+
+1. Rabi Season (Winter Sowing):
+   • Recommended: Wheat, Mustard, Chickpea (Gram), Potato.
+   • Sowing window: October to November.
+   • Scientific Advisory: Intercropping mustard with wheat improves disease resilience and balances income.
+
+2. Kharif Season (Monsoon Sowing):
+   • Recommended: Rice, Maize, Soybean, Groundnut, Pigeon Pea.
+   • Sowing window: June to July with monsoon arrival.
+
+Note: Agricultural recommendations are based on agro-climatic zone data. Profits cannot be guaranteed.`,
+      action: {
+        label: `View Detailed Crop Advisor`,
+        targetView: 'market-intel',
         params: { cropId: crop.id }
       }
     };
   }
 
-  // D. DEMAND / CROP ADVISOR QUERY
+  // H. AGRONOMY & CROP HEALTH INTENT (Yellow leaves, disease, fertilizer, irrigation)
+  if (agronomyMatch) {
+    return {
+      intent: 'AGRONOMY_ADVISORY',
+      intentType: 'advisory',
+      understoodSummary: `🌾 Understood: ${agronomyMatch.title}`,
+      answer: `${agronomyMatch.title}
+
+${agronomyMatch.summary}
+
+Scientific Recommendations:
+${agronomyMatch.remedy}
+
+Source: ICAR & Krishi Vigyan Kendra (KVK) verified agricultural guidelines.`,
+      action: {
+        label: 'Open Krishi Sahayak Assistant',
+        targetView: 'farmer-dashboard',
+        params: { agronomyTopic: agronomyMatch.topicId }
+      }
+    };
+  }
+
+  // I. DEMAND INTENT
   if (isDemand) {
     const mustardAnalysis = getCropSupplyDemandAnalysis('mustard');
     const wheatAnalysis = getCropSupplyDemandAnalysis('wheat');
@@ -321,7 +519,7 @@ Note: Price data is based on available regional platform reference records. Not 
     };
   }
 
-  // E. SEARCH LISTINGS QUERY
+  // J. SEARCH LISTINGS QUERY
   if (isSearch) {
     const state = store.getState();
     const activeWheat = (state.listings || []).filter(
@@ -335,7 +533,7 @@ Note: Price data is based on available regional platform reference records. Not 
       crop: crop.name,
       cropId: crop.id,
       understoodSummary: `🔍 Understood: Show available ${crop.name} listings`,
-      answer: `Found ${activeWheat.length} active farmer/FPO listings for ${crop.emoji} ${crop.name} with total available volume of ${totalAvailKg.toLocaleString()} KG across regional clusters (Prayagraj, Kanpur, Unnao, Varanasi).
+      answer: `Found ${activeWheat.length} active farmer/FPO listings for ${crop.emoji} ${crop.name} with total available volume of ${totalAvailKg.toLocaleString()} KG across regional clusters.
 
 All listings are verified with moisture testing and quality grade certifications.`,
       action: {
@@ -346,7 +544,7 @@ All listings are verified with moisture testing and quality grade certifications
     };
   }
 
-  // F. LOGISTICS QUERY
+  // K. LOGISTICS QUERY
   if (isLogistics) {
     return {
       intent: 'Logistics & Delivery Support',
@@ -386,4 +584,22 @@ All listings are verified with moisture testing and quality grade certifications
       params: { searchQuery: crop.name }
     }
   };
+};
+
+/**
+ * Validates if an intent or action represents a high-risk or irreversible action
+ * requiring explicit user confirmation before execution.
+ */
+export const isHighRiskAction = (intent, params = {}) => {
+  if (!intent) return false;
+  const highRiskIntents = [
+    'HIGH_RISK_ACTION_CONFIRMATION',
+    'DELETE_LISTING',
+    'MAKE_PAYMENT',
+    'CANCEL_ORDER',
+    'DELETE_ACCOUNT'
+  ];
+  if (highRiskIntents.includes(intent.toUpperCase())) return true;
+  if (params?.isHighRisk || params?.action === 'delete' || params?.action === 'pay') return true;
+  return false;
 };

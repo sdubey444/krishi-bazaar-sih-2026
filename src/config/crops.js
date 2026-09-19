@@ -161,6 +161,50 @@ export const CROPS = [
     minOrderKg: 10,
     shelfLifeDays: 180,
     description: 'Traditional chemical-free organic jaggery blocks.'
+  },
+  {
+    id: 'apple',
+    name: 'Apple',
+    category: CROP_CATEGORIES.OTHER,
+    emoji: '🍎',
+    defaultUnit: 'kg',
+    refPrice: 95,
+    minOrderKg: 20,
+    shelfLifeDays: 45,
+    description: 'Crisp Royal Delicious and Golden apples from Himachal Pradesh and Kashmir orchards.'
+  },
+  {
+    id: 'chilli',
+    name: 'Green Chilli',
+    category: CROP_CATEGORIES.VEGETABLES,
+    emoji: '🌶️',
+    defaultUnit: 'kg',
+    refPrice: 40,
+    minOrderKg: 10,
+    shelfLifeDays: 14,
+    description: 'Spicy fresh green chillies direct from Guntur and UP vegetable belts.'
+  },
+  {
+    id: 'garlic',
+    name: 'Garlic',
+    category: CROP_CATEGORIES.VEGETABLES,
+    emoji: '🧄',
+    defaultUnit: 'kg',
+    refPrice: 120,
+    minOrderKg: 10,
+    shelfLifeDays: 180,
+    description: 'Cured whole white garlic bulbs from Mandsaur and Rajasthan mandis.'
+  },
+  {
+    id: 'cotton',
+    name: 'Raw Cotton',
+    category: CROP_CATEGORIES.OTHER,
+    emoji: '☁️',
+    defaultUnit: 'kg',
+    refPrice: 72,
+    minOrderKg: 50,
+    shelfLifeDays: 365,
+    description: 'Medium and long staple raw seed cotton (Kapas) from Punjab and Gujarat belts.'
   }
 ];
 
