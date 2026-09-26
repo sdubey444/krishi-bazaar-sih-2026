@@ -32,6 +32,88 @@ export const CROP_SYNONYMS = {
   coconut: ['coconut', 'nariyal', 'नारियल', 'தேங்காய்']
 };
 
+// Language names (English + native + common Roman/Devanagari spellings) mapped to i18n codes
+export const LANGUAGE_NAME_MAP = {
+  hi: ['hindi', 'हिंदी', 'हिन्दी'],
+  en: ['english', 'angrezi', 'angreji', 'इंग्लिश', 'अंग्रेजी', 'अंग्रेज़ी'],
+  pa: ['punjabi', 'panjabi', 'ਪੰਜਾਬੀ', 'पंजाबी'],
+  bn: ['bengali', 'bangla', 'বাংলা', 'बंगाली'],
+  mr: ['marathi', 'मराठी'],
+  ta: ['tamil', 'தமிழ்', 'तमिल'],
+  te: ['telugu', 'తెలుగు', 'तेलुगु'],
+  gu: ['gujarati', 'ગુજરાતી', 'गुजराती'],
+  kn: ['kannada', 'ಕನ್ನಡ', 'कन्नड़', 'कन्नड'],
+  ml: ['malayalam', 'മലയാളം', 'मलयालम'],
+  ur: ['urdu', 'اردو', 'उर्दू'],
+  or: ['odia', 'oriya', 'ଓଡ଼ିଆ', 'उड़िया']
+};
+
+// Short confirmation phrase, written in the newly selected language
+const LANGUAGE_CONFIRMATION = {
+  hi: 'ठीक है — वेबसाइट अब हिंदी में है।',
+  en: 'Done — the website is now in English.',
+  pa: 'ਠੀਕ ਹੈ — ਵੈੱਬਸਾਈਟ ਹੁਣ ਪੰਜਾਬੀ ਵਿੱਚ ਹੈ।',
+  bn: 'ঠিক আছে — ওয়েবসাইট এখন বাংলায়।',
+  mr: 'ठीक आहे — वेबसाइट आता मराठीत आहे.',
+  ta: 'சரி — இணையதளம் இப்போது தமிழில் உள்ளது.',
+  te: 'సరే — వెబ్‌సైట్ ఇప్పుడు తెలుగులో ఉంది.',
+  gu: 'ઠીક છે — વેબસાઇટ હવે ગુજરાતીમાં છે.',
+  kn: 'ಸರಿ — ವೆಬ್‌ಸೈಟ್ ಈಗ ಕನ್ನಡದಲ್ಲಿದೆ.',
+  ml: 'ശരി — വെബ്‌സൈറ്റ് ഇപ്പോൾ മലയാളത്തിലാണ്.',
+  ur: 'ٹھیک ہے — ویب سائٹ اب اردو میں ہے۔',
+  or: 'ଠିକ୍ ଅଛି — ୱେବସାଇଟ୍ ବର୍ତ୍ତମାନ ଓଡ଼ିଆରେ ଅଛି।'
+};
+
+/**
+ * Detects a "switch the website language" command in Hindi/Hinglish/English.
+ * Returns the target i18n language code, or null when the query is not a language switch.
+ * Requires either an explicit switch verb (e.g. "kar do", "switch to", "change language")
+ * or a very short query that is essentially just the language name, to avoid false positives
+ * like "English wheat price".
+ */
+export const detectLanguageChange = (rawQuery) => {
+  const q = (rawQuery || '').toLowerCase().trim();
+  if (!q) return null;
+
+  const hasSwitchVerb =
+    q.includes('kar do') || q.includes('kardo') || q.includes('kar de') || q.includes('kar dijiye') ||
+    q.includes('कर दो') || q.includes('कर दीजिए') || q.includes('कर दे') || q.includes('कर देना') ||
+    q.includes('me karo') || q.includes('mein karo') || q.includes('में करो') || q.includes('में कर') ||
+    q.includes('switch to') || q.includes('switch') || q.includes('change language') || q.includes('change to') ||
+    q.includes('language') || q.includes('bhasha') || q.includes('भाषा') ||
+    q.includes('badal') || q.includes('बदल');
+
+  let matchedCode = null;
+  for (const [code, names] of Object.entries(LANGUAGE_NAME_MAP)) {
+    if (names.some(name => q.includes(name))) {
+      matchedCode = code;
+      break;
+    }
+  }
+  if (!matchedCode) return null;
+
+  const wordCount = q.split(/\s+/).filter(Boolean).length;
+  if (hasSwitchVerb || wordCount <= 2) return matchedCode;
+  return null;
+};
+
+/**
+ * Builds a CHANGE_LANGUAGE NLU result for a resolved language code.
+ */
+export const buildLanguageChangeResult = (langCode) => ({
+  intent: 'CHANGE_LANGUAGE',
+  intentType: 'language',
+  langCode,
+  understoodSummary: '🌐 Understood: Change Website Language',
+  answer: LANGUAGE_CONFIRMATION[langCode] || `Language updated (${langCode}).`,
+  action: {
+    label: 'Change Language',
+    targetView: 'change_language',
+    tool: 'changeLanguage',
+    params: { langCode }
+  }
+});
+
 /**
  * Extracts crop from natural text
  */
@@ -275,6 +357,15 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
       intent: 'empty',
       text: 'Please ask a question or tap the microphone to speak.'
     };
+  }
+
+  // ==========================================
+  // 0. CHANGE WEBSITE LANGUAGE (safe, reversible — highest priority)
+  // "Hindi kar do", "English kar do", "switch to English", "पूरी website हिंदी में कर दो"
+  // ==========================================
+  const langChangeCode = detectLanguageChange(query);
+  if (langChangeCode) {
+    return buildLanguageChangeResult(langChangeCode);
   }
 
   // Detect explicit location in query (Priority 1)
@@ -1467,6 +1558,44 @@ export const processNaturalQuery = (rawQuery, defaultCropId = 'wheat', locationC
       params: { searchQuery: crop.name }
     }
   };
+};
+
+/**
+ * Splits a natural request into individual sequential commands.
+ * Handles connectors in Hindi / Hinglish / English:
+ *   "aur", "और", "and", "then", "phir", "फिर", "तथा", "uske baad", "उसके बाद", "; ", ", "
+ */
+export const splitIntoCommands = (rawQuery) => {
+  const query = (rawQuery || '').trim();
+  if (!query) return [];
+  const parts = query
+    .split(/\s+(?:aur|और|and|then|phir|फिर|तथा|uske baad|उसके बाद)\s+|\s*[;]\s*/i)
+    .map(s => s.trim())
+    .filter(Boolean);
+  return parts.length ? parts : [query];
+};
+
+/**
+ * Understands multi-step requests by running the single-intent NLU engine over each
+ * sequential command, carrying crop context forward across steps.
+ * Returns { isMultiStep, steps: [{ segment, result }] }.
+ */
+export const processConversation = (rawQuery, defaultCropId = 'wheat', locationContext = null, roleContext = null) => {
+  const segments = splitIntoCommands(rawQuery);
+  const steps = [];
+  let carryCropId = defaultCropId;
+
+  for (const segment of segments) {
+    const result = processNaturalQuery(segment, carryCropId, locationContext, roleContext);
+    if (result && result.cropId) carryCropId = result.cropId;
+    steps.push({ segment, result });
+  }
+
+  if (steps.length === 0) {
+    steps.push({ segment: rawQuery, result: processNaturalQuery(rawQuery, defaultCropId, locationContext, roleContext) });
+  }
+
+  return { isMultiStep: segments.length > 1, steps };
 };
 
 /**

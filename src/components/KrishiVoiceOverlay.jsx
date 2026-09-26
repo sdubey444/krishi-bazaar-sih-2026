@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, X, Send, Loader2, Bot, ShieldAlert, CheckCircle2, Keyboard } from 'lucide-react';
 import { askKrishiAi } from '../services/geminiService';
-import { processNaturalQuery, getAssistantMetaForRole, resolveRole } from '../services/nluService';
+import { processNaturalQuery, processConversation, getAssistantMetaForRole, resolveRole } from '../services/nluService';
 import { locationService } from '../services/locationService';
 import { i18n } from '../services/i18nService';
 import { store } from '../services/store';
@@ -88,7 +88,65 @@ export default function KrishiVoiceOverlay({
 
     try {
       const roleContext = { role: activeRole, currentUser, currentView };
+
+      // Multi-step commands ("X aur Y", "Hindi kar do aur marketplace kholo")
+      const convo = processConversation(cleanQuery, defaultCropId, currentLocation, roleContext);
+      if (convo.isMultiStep) {
+        const answers = [];
+        let finalNavigation = null;
+        let pendingConfirm = null;
+
+        for (const step of convo.steps) {
+          const res = step.result;
+          if (!res) continue;
+
+          // Language changes apply immediately and update the whole UI
+          if (res.intent === 'CHANGE_LANGUAGE' && res.langCode) {
+            i18n.setLanguage(res.langCode);
+            if (res.answer) answers.push(res.answer);
+            continue;
+          }
+
+          // A confirmation-gated step pauses the chain for explicit approval
+          if (res.action && (res.requiresConfirmation || res.action.isHighRisk)) {
+            pendingConfirm = res.action;
+            if (res.answer) answers.push(res.answer);
+            continue;
+          }
+
+          // Remember the last real navigation to perform after the chain
+          if (res.action && res.action.targetView && res.action.targetView !== 'change_language') {
+            finalNavigation = res.action;
+          }
+          if (res.answer) answers.push(res.answer);
+        }
+
+        setResponseText(answers.join('\n\n') || (isHi ? 'हो गया।' : 'Done.'));
+
+        if (pendingConfirm) {
+          setPendingConfirmationAction(pendingConfirm);
+          setPhase('response');
+          return;
+        }
+
+        setPhase('response');
+        dismissTimerRef.current = setTimeout(() => {
+          if (finalNavigation && onNavigate) onNavigate(finalNavigation.targetView, finalNavigation.params);
+          handleClose();
+        }, 1600);
+        return;
+      }
+
       const nluResult = processNaturalQuery(cleanQuery, defaultCropId, currentLocation, roleContext);
+
+      // Language change is a safe, immediate action — apply and confirm without leaving the page
+      if (nluResult.intent === 'CHANGE_LANGUAGE' && nluResult.langCode) {
+        i18n.setLanguage(nluResult.langCode);
+        setResponseText(nluResult.answer);
+        setPhase('response');
+        dismissTimerRef.current = setTimeout(handleClose, 2200);
+        return;
+      }
 
       // Supplementary grounded AI context (non-blocking for buy intents)
       let aiExplanation = null;
