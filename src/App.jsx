@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { store } from './services/store';
+import { i18n } from './services/i18nService';
 
 // Components
 import QuickRoleBar from './components/QuickRoleBar';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import KrishiAiModal from './components/KrishiAiModal';
+import KrishiVoiceOverlay from './components/KrishiVoiceOverlay';
 import LogisticsRegisterModal from './components/LogisticsRegisterModal';
 import AuthPromptModal from './components/AuthPromptModal';
 import MarketStrip from './components/MarketStrip';
@@ -39,9 +41,11 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(store.currentUser);
   const [selectedOrderId, setSelectedOrderId] = useState('ORD-2026-8812');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isVoiceOverlayOpen, setIsVoiceOverlayOpen] = useState(false);
   const [isLogisticsRegisterOpen, setIsLogisticsRegisterOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [defaultAiCropId, setDefaultAiCropId] = useState('wheat');
+  const [marketplaceSearch, setMarketplaceSearch] = useState('');
 
   // Account-First Auth Interception State
   const [authPrompt, setAuthPrompt] = useState(null); // { isOpen: boolean, title: string, message: string, actionType: string, returnAction: string, initialRole?: string }
@@ -170,7 +174,9 @@ export default function App() {
   };
 
   const handleVoiceSearchClick = () => {
-    setIsAiModalOpen(true);
+    // Tapping Krishi AI now activates the small Siri-style voice overlay
+    // instead of opening the large assistant modal.
+    setIsVoiceOverlayOpen(true);
   };
 
   const renderActiveView = () => {
@@ -203,6 +209,7 @@ export default function App() {
             setSelectedOrderId={setSelectedOrderId}
             currentUser={currentUser}
             onRequireAuth={triggerAuthRequired}
+            initialSearch={marketplaceSearch}
           />
         );
 
@@ -313,6 +320,14 @@ export default function App() {
   };
 
   const handleAiNavigate = (targetView, params) => {
+    // Language switch is applied in-place — never treat it as a page navigation
+    if (targetView === 'change_language') {
+      if (params?.langCode) i18n.setLanguage(params.langCode);
+      return;
+    }
+    if (params?.searchQuery !== undefined) {
+      setMarketplaceSearch(params.searchQuery || '');
+    }
     if (params?.cropId) {
       setDefaultAiCropId(params.cropId);
     }
@@ -384,6 +399,17 @@ export default function App() {
       <KrishiAiModal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
+        defaultCropId={defaultAiCropId}
+        onNavigate={handleAiNavigate}
+        currentUser={currentUser}
+        currentRole={currentUser?.role}
+        currentView={currentView}
+      />
+
+      {/* Krishi AI Siri-style Voice Overlay (primary activation UX) */}
+      <KrishiVoiceOverlay
+        isOpen={isVoiceOverlayOpen}
+        onClose={() => setIsVoiceOverlayOpen(false)}
         defaultCropId={defaultAiCropId}
         onNavigate={handleAiNavigate}
         currentUser={currentUser}

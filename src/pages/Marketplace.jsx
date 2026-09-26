@@ -18,12 +18,12 @@ import {
 } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 
-export default function Marketplace({ setCurrentView, setSelectedOrderId, onRequireAuth }) {
+export default function Marketplace({ setCurrentView, setSelectedOrderId, onRequireAuth, initialSearch = '' }) {
   const [listings, setListings] = useState(store.listings);
   const [currentUser, setCurrentUser] = useState(store.currentUser);
 
   // Filters
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch || '');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('All');
   const [maxPrice, setMaxPrice] = useState(100);
