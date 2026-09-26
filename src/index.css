@@ -53,3 +53,9 @@
   animation-play-state: paused;
 }
 
+/* Siri-style listening wave bars for Krishi AI voice overlay */
+@keyframes siriwave {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
